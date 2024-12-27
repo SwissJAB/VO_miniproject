@@ -6,9 +6,15 @@ from descriptor_utils import get_descriptors
 from get_descriptors.match_descriptors import matchDescriptors
 from get_descriptors.plot_matches import plotMatches
 
+from two_view_geometry.estimate_essential_matrix import estimateEssentialMatrix
+from two_view_geometry.decompose_essential_matrix import decomposeEssentialMatrix
+from two_view_geometry.disambiguate_relative_pose import disambiguateRelativePose
+from two_view_geometry.linear_triangulation import linearTriangulation
+from two_view_geometry.draw_camera import drawCamera
+
 ### IMPORT THE DATA ###
 
-data_set_root_file = './Datasets/'
+data_set_root_file = '../Datasets/'
 datasets = ['parking','kitti','malaga']
 dataset_curr = datasets[0]
 
@@ -41,63 +47,70 @@ print(f"Time to get descriptors for the second image: {end_time - start_time} se
 
 matches = matchDescriptors(descriptors2, descriptors1, match_lambda)
     
-# plt.clf()
-# plt.close()
-# plt.imshow(img2, cmap='gray')
-# plt.plot(keypoints2[1, :], keypoints2[0, :], 'rx', linewidth=2)
-# plotMatches(matches, keypoints2, keypoints1)
-# plt.tight_layout()
-# plt.axis('off')
-# plt.show()
+plt.clf()
+plt.close()
+plt.imshow(img2, cmap='gray')
+plt.plot(keypoints2[1, :], keypoints2[0, :], 'rx', linewidth=2)
+plotMatches(matches, keypoints2, keypoints1)
+plt.tight_layout()
+plt.axis('off')
+plt.show()
 
 # Extract matched keypoints
 matched_keypoints1 = keypoints1[:, matches != -1]
 matched_keypoints2 = keypoints2[:, matches[matches != -1]]
 
-
-
+# Convert matched keypoints to homogeneous coordinates
+matched_keypoints1 = np.r_[matched_keypoints1, np.ones((1, matched_keypoints1.shape[1]))]
+matched_keypoints2 = np.r_[matched_keypoints2, np.ones((1, matched_keypoints2.shape[1]))]
+print(matched_keypoints1)
 # Compute the Essential Matrix
 print(data_set_root_file + dataset_curr + '/K.txt')
 K = np.genfromtxt(data_set_root_file + dataset_curr + '/K.txt', delimiter=',', dtype=float).reshape(3, 3)
 print(K)
-E, mask = cv2.findEssentialMat(matched_keypoints1.T, matched_keypoints2.T, K)
+E = estimateEssentialMatrix(matched_keypoints1, matched_keypoints2, K, K)
 
 # Decompose the Essential Matrix to obtain rotation and translation
-_, R, t, mask = cv2.recoverPose(E, matched_keypoints1.T, matched_keypoints2.T, K)
+Rots, u3 = decomposeEssentialMatrix(E)
 
+# Disambiguate among the four possible configurations
+R, t = disambiguateRelativePose(Rots, u3, matched_keypoints1, matched_keypoints2, K, K)
 print("Rotation matrix:")
 print(R)
 print("Translation vector:")
 print(t)
 
-# Triangulate points to get 3D coordinates
-P1 = np.hstack((np.eye(3), np.zeros((3, 1))))
-P2 = np.hstack((R, t))
-points_4d_hom = cv2.triangulatePoints(K @ P1, K @ P2, matched_keypoints1, matched_keypoints2)
-points_3d = points_4d_hom[:3] / points_4d_hom[3]
-
-# Initialize pose
-pose = np.eye(4)
-
-# Update pose with the new rotation and translation
-pose[:3, :3] = R @ pose[:3, :3]
-pose[:3, 3] += t.flatten()
-
-# Plot the 3D keypoints and camera poses
+# Triangulate a point cloud using the final transformation (R,T)
+M1 = K @ np.eye(3,4)
+M2 = K @ np.c_[R, t]
+P = linearTriangulation(matched_keypoints1, matched_keypoints2, M1, M2)
+# Visualize the 3-D scene
 fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
+ax = fig.add_subplot(1, 3, 1, projection='3d')
 
-# Plot the 3D keypoints
-ax.scatter(points_3d[0], points_3d[1], points_3d[2], c='b', marker='o')
+# R,T should encode the pose of camera 2, such that M1 = [I|0] and M2=[R|t]
 
-# Plot the camera poses
-ax.scatter(0, 0, 0, c='r', marker='^')  # Initial camera pose
-ax.scatter(pose[0, 3], pose[1, 3], pose[2, 3], c='g', marker='^')  # New camera pose
+# P is a [4xN] matrix containing the triangulated point cloud (in
+# homogeneous coordinates), given by the function linearTriangulation
+ax.scatter(P[1,:], P[0,:], P[2,:], marker = 'o')
 
-# Set labels
-ax.set_xlabel('X')
-ax.set_ylabel('Y')
-ax.set_zlabel('Z')
-ax.set_title('3D Keypoints and Camera Poses')
+# Display camera pose
+drawCamera(ax, np.zeros((3,)), np.eye(3), length_scale = 2)
+ax.text(-0.1,-0.1,-0.1,"Cam 1")
+
+center_cam2_W = -R.T @ t
+drawCamera(ax, center_cam2_W, R.T, length_scale = 2)
+ax.text(center_cam2_W[0]-0.1, center_cam2_W[1]-0.1, center_cam2_W[2]-0.1,'Cam 2')
+
+# Display matched points
+ax = fig.add_subplot(1,3,2)
+ax.imshow(img1)
+ax.scatter(matched_keypoints1[1,:], matched_keypoints1[0,:], color = 'y', marker='s')
+ax.set_title("Image 1")
+
+ax = fig.add_subplot(1,3,3)
+ax.imshow(img2)
+ax.scatter(matched_keypoints2[1,:], matched_keypoints2[0,:], color = 'y', marker='s')
+ax.set_title("Image 2")
 
 plt.show()
