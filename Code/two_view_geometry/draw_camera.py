@@ -24,17 +24,32 @@ def drawCamera(ax, position, direction, length_scale = 1, head_size = 10,
                 [position[2], position[2] + length_scale * direction[2, 0]],
                 **arrow_prop_dict)
     ax.add_artist(a)
+    ax.text(position[0] + length_scale * direction[0, 0], 
+            position[1] + length_scale * direction[1, 0], 
+            position[2] + length_scale * direction[2, 0], 
+            'X', color='r')
+
     arrow_prop_dict = dict(mutation_scale=head_size, arrowstyle='-|>', color='g')
     a = Arrow3D([position[0], position[0] + length_scale * direction[0, 1]],
                 [position[1], position[1] + length_scale * direction[1, 1]],
                 [position[2], position[2] + length_scale * direction[2, 1]],
                 **arrow_prop_dict)
     ax.add_artist(a)
+    ax.text(position[0] + length_scale * direction[0, 1], 
+            position[1] + length_scale * direction[1, 1], 
+            position[2] + length_scale * direction[2, 1], 
+            'Y', color='g')
+
     arrow_prop_dict = dict(mutation_scale=head_size, arrowstyle='-|>', color='b')
     a = Arrow3D([position[0], position[0] + length_scale * direction[0, 2]],
                 [position[1], position[1] + length_scale * direction[1, 2]],
                 [position[2], position[2] + length_scale * direction[2, 2]],
                 **arrow_prop_dict)
+    ax.add_artist(a)
+    ax.text(position[0] + length_scale * direction[0, 2], 
+            position[1] + length_scale * direction[1, 2], 
+            position[2] + length_scale * direction[2, 2], 
+            'Z', color='b')
     ax.add_artist(a)
 
     if not set_ax_limits:

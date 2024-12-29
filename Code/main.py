@@ -18,22 +18,24 @@ from get_descriptors.SIFT.compute_difference_of_gaussians import computeDifferen
 from get_descriptors.SIFT.compute_image_pyramid import computeImagePyramid 
 from get_descriptors.SIFT.extract_keypoints import extractKeypoints
 
+from feature_tracking.klt_tracking import track_keypoints
+
 ### IMPORT THE DATA ###
 
-data_set_root_file = '../Datasets/'
+data_set_root_file = './Datasets/'
 datasets = ['parking','kitti','malaga']
 dataset_curr = datasets[0]
 
 ### SELECT 2 IMAGES ###
-images = ['img_00000.png','img_00001.png']
+images = ['img_00000.png','img_00003.png']
 
 # Load the images
 img1 = cv2.imread(f'{data_set_root_file}{datasets[0]}/images/{images[0]}', cv2.IMREAD_GRAYSCALE)
 img2 = cv2.imread(f'{data_set_root_file}{datasets[0]}/images/{images[1]}', cv2.IMREAD_GRAYSCALE)
 
-descriptor='shi tomasi'
+descriptor='shi_tomasi'
 
-if descriptor == 'harris' or descriptor == 'shi tomasi':
+if descriptor == 'harris' or descriptor == 'shi_tomasi':
     ### COMPUTE CORNER SCORES ###
     corner_patch_size = 9
     harris_kappa = 0.08
@@ -132,9 +134,9 @@ matched_keypoints2 = np.r_[matched_keypoints2, np.ones((1, matched_keypoints2.sh
 
 print(matched_keypoints1)
 # Compute the Essential Matrix
-print(data_set_root_file + dataset_curr + '/K.txt')
+print("Path:", data_set_root_file + dataset_curr + '/K.txt')
 K = np.genfromtxt(data_set_root_file + dataset_curr + '/K.txt', delimiter=',', dtype=float).reshape(3, 3)
-print(K)
+print("K:", K)
 E = estimateEssentialMatrix(matched_keypoints1, matched_keypoints2, K, K)
 
 # Decompose the Essential Matrix to obtain rotation and translation
@@ -159,15 +161,21 @@ ax = fig.add_subplot(1, 3, 1, projection='3d')
 
 # P is a [4xN] matrix containing the triangulated point cloud (in
 # homogeneous coordinates), given by the function linearTriangulation
-ax.scatter(P[1,:], P[0,:], P[2,:], marker = 'o')
+ax.scatter(P[0,:], P[1,:], P[2,:], marker = 'o')
 
 # Display camera pose
 drawCamera(ax, np.zeros((3,)), np.eye(3), length_scale = 2)
 ax.text(-0.1,-0.1,-0.1,"Cam 1")
 
 center_cam2_W = -R.T @ t
+
 drawCamera(ax, center_cam2_W, R.T, length_scale = 2)
 ax.text(center_cam2_W[0]-0.1, center_cam2_W[1]-0.1, center_cam2_W[2]-0.1,'Cam 2')
+
+# Label the axes
+ax.set_xlabel('X')
+ax.set_ylabel('Y')
+ax.set_zlabel('Z')
 
 # Display matched points
 ax = fig.add_subplot(1,3,2)
