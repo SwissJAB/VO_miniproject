@@ -57,7 +57,7 @@ if descriptor == 'harris' or descriptor == 'shi tomasi':
     print(f"Number of matches: {np.sum(matches != -1)}")
     
     # Plot the matches
-    plotMatches(matches, keypoints2, keypoints1)
+    # plotMatches(matches, keypoints2, keypoints1)
 
 
 elif descriptor == 'sift':
@@ -120,8 +120,11 @@ else:
     raise ValueError("Invalid descriptor type")
 
 # Extract matched keypoints
-matched_keypoints1 = keypoints1[:, matches != -1]
-matched_keypoints2 = keypoints2[:, matches[matches != -1]]
+query_indices = np.nonzero(matches >= 0)[0]
+match_indices = matches[query_indices]
+
+matched_keypoints1 = keypoints1[:, match_indices]
+matched_keypoints2 = keypoints2[:, query_indices]
 
 # Convert matched keypoints to homogeneous coordinates
 matched_keypoints1 = np.r_[matched_keypoints1, np.ones((1, matched_keypoints1.shape[1]))]
