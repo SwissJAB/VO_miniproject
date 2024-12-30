@@ -156,7 +156,7 @@ class VisualOdometryPipeline:
 
     def _match_descriptors(self):
         """
-        Use matchDescriptors() from your local library.
+        Use matchDescriptors() from local library.
         Then extract matched keypoints in homogeneous coordinates.
         """
         if self.descriptor_name in ['harris', 'shi_tomasi']:
@@ -184,7 +184,7 @@ class VisualOdometryPipeline:
         matched_keypoints1 = np.r_[matched_keypoints1, np.ones((1, matched_keypoints1.shape[1]))]
         matched_keypoints2 = np.r_[matched_keypoints2, np.ones((1, matched_keypoints2.shape[1]))]
 
-        # Switch the coordinates if you truly need them swapped again
+        # Switch the coordinates if truly need them swapped again TODO: This is not great yet
         self.matched_keypoints1 = np.array([matched_keypoints1[1], matched_keypoints1[0], matched_keypoints1[2]])
         self.matched_keypoints2 = np.array([matched_keypoints2[1], matched_keypoints2[0], matched_keypoints2[2]])
         print("matched_keypoints1:\n", self.matched_keypoints1)

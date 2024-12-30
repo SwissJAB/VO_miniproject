@@ -4,3 +4,4 @@
 /Code/get_descriptors/SIFT/__pycache__
 /Datasets/*
 *.pyc
+.DS_Store
