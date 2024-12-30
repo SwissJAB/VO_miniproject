@@ -3,11 +3,11 @@ DATA:
   datasets: ['parking','kitti','malaga']
   curr_dataset: 'parking'
   init_img_1: '/images/img_00000.png'
-  init_img_2: '/images/img_00005.png'
+  init_img_2: '/images/img_00008.png'
 
 FEATURES:
   detectors: ['shi_tomasi', 'harris', 'sift']
-  curr_detector: 0
+  curr_detector: 2
 
 HARRIS:
   kappa: 0.08
@@ -30,8 +30,11 @@ SIFT:
   contrast_threshold: 0.04 
   sigma: 1.0 # 1 or 1.6?
   #rescale_factor: 0.3
-  n_otave_layers: 3
-  #num_octaves: 5 #unused currently
+  n_otave_layers: 5
+  num_octaves: 5 #unused currently
   match_lambda: 4
 
+RANSAC:
+  prob: 0.999
+  threshold: 2.0
 
