@@ -27,7 +27,7 @@ datasets = ['parking','kitti','malaga']
 dataset_curr = datasets[0]
 
 ### SELECT 2 IMAGES ###
-images = ['img_00000.png','img_00003.png']
+images = ['img_00000.png','img_00015.png']
 
 # Load the images
 img1 = cv2.imread(f'{data_set_root_file}{datasets[0]}/images/{images[0]}', cv2.IMREAD_GRAYSCALE)
@@ -141,8 +141,10 @@ print(matched_keypoints1)
 print("Path:", data_set_root_file + dataset_curr + '/K.txt')
 K = np.genfromtxt(data_set_root_file + dataset_curr + '/K.txt', delimiter=',', dtype=float).reshape(3, 3)
 print("K:", K)
-E = estimateEssentialMatrix(matched_keypoints1, matched_keypoints2, K, K)
 
+print("matched_keypoints1:", matched_keypoints1.shape)
+print("matched_keypoints2:", matched_keypoints2.shape)
+E, mask = cv2.findEssentialMat(matched_keypoints1[:2].T, matched_keypoints2[:2].T, K, method=cv2.RANSAC, prob=0.999, threshold=1.0)
 # Decompose the Essential Matrix to obtain rotation and translation
 Rots, u3 = decomposeEssentialMatrix(E)
 
