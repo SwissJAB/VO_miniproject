@@ -1,10 +1,7 @@
-<<<<<<< HEAD
-/Datasets
 /Code/two_view_geometry/__pycache__
 /Code/get_descriptors/__pycache__
 /Code/__pycache__
 /Code/get_descriptors/SIFT/__pycache__
-=======
 /Datasets/*
 *.pyc
->>>>>>> origin/nici
+.DS_Store
