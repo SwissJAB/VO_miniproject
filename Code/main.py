@@ -132,6 +132,10 @@ matched_keypoints2 = keypoints2[:, query_indices]
 matched_keypoints1 = np.r_[matched_keypoints1, np.ones((1, matched_keypoints1.shape[1]))]
 matched_keypoints2 = np.r_[matched_keypoints2, np.ones((1, matched_keypoints2.shape[1]))]
 
+# Switch the coordinates of matched keypoints. the second column of matched_keypoints1 will be the first column and vice versa
+matched_keypoints1 = np.array([matched_keypoints1[1], matched_keypoints1[0], matched_keypoints1[2]])
+matched_keypoints2 = np.array([matched_keypoints2[1], matched_keypoints2[0], matched_keypoints2[2]])
+
 print(matched_keypoints1)
 # Compute the Essential Matrix
 print("Path:", data_set_root_file + dataset_curr + '/K.txt')
@@ -180,14 +184,14 @@ ax.set_zlabel('Z')
 # Display matched points
 ax = fig.add_subplot(1,3,2)
 ax.imshow(img1)
-ax.scatter(matched_keypoints1[1,:], matched_keypoints1[0,:], color = 'y', marker='s')
+ax.scatter(matched_keypoints1[0,:], matched_keypoints1[1,:], color = 'y', marker='s')
 for i in range(matched_keypoints1.shape[1]):
-    ax.plot([matched_keypoints1[1,i], matched_keypoints2[1,i]], [matched_keypoints1[0,i], matched_keypoints2[0,i]], 'r-')
+    ax.plot([matched_keypoints1[0,i], matched_keypoints2[0,i]], [matched_keypoints1[1,i], matched_keypoints2[1,i]], 'r-')
 ax.set_title("Image 1")
 
 ax = fig.add_subplot(1,3,3)
 ax.imshow(img2)
-ax.scatter(matched_keypoints2[1,:], matched_keypoints2[0,:], color = 'y', marker='s')
+ax.scatter(matched_keypoints2[0,:], matched_keypoints2[1,:], color = 'y', marker='s')
 # for i in range(matched_keypoints2.shape[1]):
 #     ax.plot([matched_keypoints1[1,i], matched_keypoints2[1,i]], [matched_keypoints1[0,i], matched_keypoints2[0,i]], 'r-')
 ax.set_title("Image 2")
