@@ -131,6 +131,10 @@ class VisualOdometryPipeline:
             st_cfg['nonmaximum_supression_radius'], 
             st_cfg['descriptor_radius']
         )
+        print("shi keypoints1 shape:", self.keypoints1.shape)
+        print("shi keypoints2 shape:", self.keypoints2.shape)
+        print("shi descriptors1 shape:", self.descriptors1.shape)
+        print("shi descriptors2 shape:", self.descriptors2.shape)
 
     def _detect_sift(self):
         sift_cfg = self.config['SIFT']
@@ -154,6 +158,11 @@ class VisualOdometryPipeline:
         self.descriptors1 = descriptors1_t
         self.descriptors2 = descriptors2_t
 
+        print("SIFT keypoints1 shape:", self.keypoints1.shape)
+        print("SIFT keypoints2 shape:", self.keypoints2.shape)
+        print("SIFT descriptors1 shape:", self.descriptors1.shape)
+        print("SIFT descriptors2 shape:", self.descriptors2.shape)
+         
     def _match_descriptors(self):
         """
         Use matchDescriptors() from local library.
@@ -205,8 +214,8 @@ class VisualOdometryPipeline:
             self.matched_keypoints2[:2].T,
             self.K, 
             method=cv2.RANSAC, 
-            prob=0.999, 
-            threshold=1.0
+            prob=self.config['RANSAC']['prob'], 
+            threshold=self.config['RANSAC']['threshold']
         )
         print("Mask shape:", mask.shape if mask is not None else "No mask")
         
