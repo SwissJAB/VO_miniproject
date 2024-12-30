@@ -27,7 +27,7 @@ datasets = ['parking','kitti','malaga']
 dataset_curr = datasets[0]
 
 ### SELECT 2 IMAGES ###
-images = ['img_00000.png','img_00015.png']
+images = ['img_00000.png','img_00050.png']
 
 # Load the images
 img1 = cv2.imread(f'{data_set_root_file}{datasets[0]}/images/{images[0]}', cv2.IMREAD_GRAYSCALE)
@@ -44,16 +44,9 @@ if descriptor == 'harris' or descriptor == 'shi_tomasi':
     descriptor_radius = 9
     match_lambda = 4
 
-    # Get descriptors for the first 2 images
-    start_time = time.time()
     descriptors1, keypoints1 = get_descriptors(img1, corner_patch_size, harris_kappa, num_keypoints, nonmaximum_supression_radius, descriptor_radius)
-    end_time = time.time()
-    print(f"Time to get descriptors for the first image: {end_time - start_time} seconds")
 
-    start_time = time.time()
     descriptors2, keypoints2 = get_descriptors(img2, corner_patch_size, harris_kappa, num_keypoints, nonmaximum_supression_radius, descriptor_radius)
-    end_time = time.time()
-    print(f"Time to get descriptors for the second image: {end_time - start_time} seconds")
 
     matches = matchDescriptors(descriptors2, descriptors1, match_lambda)
     print(f"Number of matches: {np.sum(matches != -1)}")
@@ -73,51 +66,19 @@ elif descriptor == 'sift':
     rescale_factor = 0.3            # rescale images to make it faster
     num_scales = 3                  # number of scales per octave
     num_octaves = 5                 # number of octaves
+    match_lambda = 4
 
     imgs = [img1, img2]
     keypoint_locations = []
     keypoint_descriptors = []
 
-    for i in range(len(imgs)):
-        pass
-        image_pyramid = computeImagePyramid(imgs[i], num_octaves)
-        blurred_images = computeBlurredImages(image_pyramid, num_scales, sift_sigma)
-        diff_of_gaussians = computeDifferenceOfGaussians(blurred_images)
-        tmp_keypoint_locs = extractKeypoints(diff_of_gaussians, contrast_threshold)
-        desc, locs = computeDescriptors(blurred_images, tmp_keypoint_locs, rotation_invariant)
-
-        # Store the information
-        keypoint_locations.append(locs)
-        keypoint_descriptors.append(desc)
-    
-    # OpenCV brute force matching
-    bf = cv2.BFMatcher()
-    matches = bf.knnMatch(keypoint_descriptors[0].astype(np.float32), keypoint_descriptors[1].astype(np.float32), 2)
-
-    # Apply ratio test
-    good = []
-    for m,n in matches:
-        if m.distance < 0.8*n.distance or n.distance < 0.8*m.distance:
-            good.append(m)
-
-    # Plot the results
-    plt.figure()
-    dh = int(img2.shape[0] - img1.shape[0])
-    top_padding = int(dh/2)
-    img1_padded = cv2.copyMakeBorder(img1, top_padding, dh - int(dh/2),
-            0, 0, cv2.BORDER_CONSTANT, 0)
-    plt.imshow(np.c_[img1_padded, img2], cmap = "gray")
-
-    for match in good:
-        img1_idx = match.queryIdx
-        img2_idx = match.trainIdx
-        x1 = keypoint_locations[0][img1_idx,1]
-        y1 = keypoint_locations[0][img1_idx,0] + top_padding
-        x2 = keypoint_locations[1][img2_idx,1] + img1.shape[1]
-        y2 = keypoint_locations[1][img2_idx,0]
-        plt.plot(np.array([x1, x2]), np.array([y1, y2]), "o-")
-    plt.show()
-
+    sift = cv2.SIFT_create()
+    keypoints1, descriptors1 = sift.detectAndCompute(img1, None)
+    keypoints2, descriptors2 = sift.detectAndCompute(img2, None)
+    print(f"Number of keypoints, descriptors in image 1: {len(keypoints1), len(descriptors1)}")
+    print(f"Number of keypoints, descriptors in image 2: {len(keypoints2), len(descriptors2)}")
+    matches = matchDescriptors(descriptors2, descriptors1, match_lambda)
+    print(f"Number of matches: {np.sum(matches != -1)}")
 else:
     raise ValueError("Invalid descriptor type")
 
@@ -145,6 +106,13 @@ print("K:", K)
 print("matched_keypoints1:", matched_keypoints1.shape)
 print("matched_keypoints2:", matched_keypoints2.shape)
 E, mask = cv2.findEssentialMat(matched_keypoints1[:2].T, matched_keypoints2[:2].T, K, method=cv2.RANSAC, prob=0.999, threshold=1.0)
+print("Mask shape:", mask.shape)
+
+matched_keypoints1 = matched_keypoints1[:, mask.ravel() == 1] 
+matched_keypoints2 = matched_keypoints2[:, mask.ravel() == 1]
+
+
+
 # Decompose the Essential Matrix to obtain rotation and translation
 Rots, u3 = decomposeEssentialMatrix(E)
 
