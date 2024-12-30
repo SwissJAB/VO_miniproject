@@ -2,6 +2,7 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import time
+import yaml
 from descriptor_utils import get_descriptors
 from get_descriptors.match_descriptors import matchDescriptors
 from get_descriptors.plot_matches import plotMatches
@@ -12,19 +13,24 @@ from two_view_geometry.disambiguate_relative_pose import disambiguateRelativePos
 from two_view_geometry.linear_triangulation import linearTriangulation
 from two_view_geometry.draw_camera import drawCamera
 
-from get_descriptors.SIFT.compute_blurred_images import computeBlurredImages
-from get_descriptors.SIFT.compute_descriptors import computeDescriptors 
-from get_descriptors.SIFT.compute_difference_of_gaussians import computeDifferenceOfGaussians 
-from get_descriptors.SIFT.compute_image_pyramid import computeImagePyramid 
-from get_descriptors.SIFT.extract_keypoints import extractKeypoints
+# from get_descriptors.SIFT.compute_blurred_images import computeBlurredImages
+# from get_descriptors.SIFT.compute_descriptors import computeDescriptors 
+# from get_descriptors.SIFT.compute_difference_of_gaussians import computeDifferenceOfGaussians 
+# from get_descriptors.SIFT.compute_image_pyramid import computeImagePyramid 
+# from get_descriptors.SIFT.extract_keypoints import extractKeypoints
 
 from feature_tracking.klt_tracking import track_keypoints
 
-### IMPORT THE DATA ###
+### OPEN CONFIG FILE ###
+with open('config.yaml') as file:
+    config = yaml.load(file, Loader=yaml.FullLoader)
 
-data_set_root_file = './Datasets/'
-datasets = ['parking','kitti','malaga']
-dataset_curr = datasets[0]
+### IMPORT THE DATA ###
+data_set_root_file = config['DATA']['rootdir']
+datasets = config['DATA']['datasets']
+dataset_curr = config['DATA']['curr_dataset']
+assert dataset_curr in datasets, f"Invalid dataset: {dataset_curr}"
+
 
 ### SELECT 2 IMAGES ###
 images = ['img_00000.png','img_00050.png']
