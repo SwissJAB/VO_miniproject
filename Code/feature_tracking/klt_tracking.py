@@ -10,12 +10,12 @@ def track_keypoints(prev_frame, curr_frame, prev_keypoints, landmarks):
         prev_frame (ndarray): Grayscale image of the previous frame.
         curr_frame (ndarray): Grayscale image of the current frame.
         prev_keypoints (ndarray): Array of keypoints from the previous frame.
+        landmarks (ndarray): Corresponding 3D landmarks.
         
     Returns:
         valid_prev_keypoints (ndarray): Valid keypoints from the previous frame.
         valid_curr_keypoints (ndarray): Valid tracked keypoints in the current frame.
-        status (ndarray): Status array indicating successful tracking (1) or failure (0).
-        err (ndarray): Error array indicating tracking error for each keypoint.
+        associated_landmarks (ndarray): Corresponding 3D landmarks.
     """
     # Parameters for Lucas-Kanade optical flow
     lk_params = dict(winSize=(21, 21),
@@ -34,7 +34,6 @@ def track_keypoints(prev_frame, curr_frame, prev_keypoints, landmarks):
     valid_curr_keypoints = curr_keypoints[status.flatten() == 1]
     associated_landmarks = landmarks[:, status.flatten() == 1]  # Corresponding 3D landmarks
     
-
     return valid_prev_keypoints, valid_curr_keypoints, associated_landmarks.T
 
 def draw_keypoints(frame, keypoints, color=(0, 255, 0)):

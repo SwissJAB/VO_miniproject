@@ -64,7 +64,6 @@ class VisualOdometryPipeline:
         print("Rot_mat shape, translat shape", Rot_mat.shape, translat.shape)
         landmarks = self._triangulate(Rot_mat, translat, inlier_matched_keys1, inlier_matched_keys2)
         print("landmarks shape", landmarks.shape)
-        #TODO: Visualize function 
 
         S_1 = {
             # Structure in the second frame probably TODO: Clarify this
@@ -74,11 +73,11 @@ class VisualOdometryPipeline:
             # C_1 = candidate keypoints to be triangulated
             'C': np.empty((2, 0)),      # empty at the beginning
             'F': np.empty((2, 0)),      # first obs of each candidate
-            'T': []                     # store the pose at first obs
+            'T': np.empty((1,0))                     # store the pose at first obs
         }
         T_WC_1 = {
             'R': Rot_mat,
-            't': translat
+            't': translat,
         }
 
         return S_1, T_WC_1
@@ -102,11 +101,19 @@ class VisualOdometryPipeline:
         print("T: ", T_prev)
         print('----------------------------------------INIT END----------------------------------------')
         print("Starting continuous operation...")
+        prev_frame = self.img2
         for frame in self._get_next_frames():
-            S_i, T_WC_i = self._process_frame(frame, S_prev, T_prev)
+            S_i, T_WC_i = self._process_frame(frame, prev_frame, S_prev, T_prev)
             self.global_poses.append(T_WC_i)
+            print("X:", S_i['X'].shape)
+            print("P:", S_i['P'].shape)
+            print("T:", len(S_i['T']))
+            print("C:", S_i['C'].shape)
+            print("F:", S_i['F'].shape)
+
             S_prev = S_i
             T_prev = T_WC_i
+            prev_frame = frame
             self.visualizer.update_visualizations(S_i['X'], T_WC_i['t'], frame, S_i['P'])
             print("----------------------------------------CONT----------------------------------------")
             print("S: ", S_prev)
@@ -270,13 +277,44 @@ class VisualOdometryPipeline:
 
     # Main part of the continuous operation
     # TODO: This is missing the logic for adding new landmarks.
-    def _process_frame(self, frame, S_prev, T_prev):
+    def _process_frame(self, frame, prev_frame, S_prev, T_prev):
         """
         Process each new frame for continuous operation.
         """
         S_new = S_prev.copy() # TODO: Make sure we put new stuff in here
         T_new = T_prev.copy()
         curr_gray = frame  
+    
+    # Parameters for Lucas-Kanade optical flow
+        lk_params = dict(winSize=(21, 21),
+                        maxLevel=3,
+                        criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01))
+        
+        # Calculate optical flow
+        if S_prev['C'].shape[1] > 0:
+            S_prev['C'] = S_prev['C'][:2, :].T.reshape(-1, 1, 2).astype(np.float32)
+            tracked_candidate_keypoints, status, _ = cv2.calcOpticalFlowPyrLK(prev_frame, curr_gray, S_prev['C'], None, **lk_params)
+            tracked_candidate_keypoints = tracked_candidate_keypoints.reshape(-1, 2)
+            S_new['C'] = tracked_candidate_keypoints[status.flatten() == 1]
+            S_new['C'] = S_new['C'].T
+            S_new['F'] = S_prev['F'][:, status.flatten() == 1]
+            S_prev['T'] = np.asarray(S_prev['T'])
+            S_new['T'] = S_prev['T'][:, status.flatten() == 1]
+
+            # Find new candidate keypoints
+        if self.descriptor_name == 'harris':
+            candidate_keypoints, _ = self._detect_harris(curr_gray) 
+        elif self.descriptor_name == 'shi_tomasi':
+            candidate_keypoints, _ = self._detect_shi_tomasi(curr_gray) 
+        elif self.descriptor_name == 'sift':
+            candidate_keypoints, _ = self._detect_sift(curr_gray)
+        
+        # Add the new candidate keypoints to the candidate keypoints
+        print("Candidate keypoints shape:", candidate_keypoints.shape)
+        print("S_new['C'] shape:", S_new['C'].shape)
+        S_new['C'] = np.c_[S_new['C'], candidate_keypoints]
+        # Add the new candidate keypoints to the first observation
+        S_new['F'] = np.c_[S_new['F'], candidate_keypoints]
 
         prev_keypoints = S_prev['P'][:2, :].T.reshape(-1, 1, 2).astype(np.float32)
         
@@ -325,9 +363,13 @@ class VisualOdometryPipeline:
             # Update keypoints
             S_new['P'] = valid_curr_keypoints
             S_new['X'] = valid_landmarks.T
+            T_new_repeated = np.tile(T_new, (len(candidate_keypoints[1]), 1))
+            print("T_new_repeated shape:", T_new_repeated.shape)
+
+            S_new['T'] = np.c_[S_prev['T'], T_new_repeated.T]
             return S_new, T_new
         else:
-            print("Pose konnte nicht berechnet werden.")
+            print("Pose was not calculated.")
 
     def _get_next_frames(self):
         """

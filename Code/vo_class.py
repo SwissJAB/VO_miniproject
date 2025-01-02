@@ -422,3 +422,6 @@ class VisualOdometryPipeline:
 if __name__ == "__main__":
     pipeline = VisualOdometryPipeline(config_path='Code/config.yaml')
     pipeline.run()
+
+
+
