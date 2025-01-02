@@ -5,3 +5,4 @@
 /Datasets/*
 *.pyc
 .DS_Store
+*.mov
