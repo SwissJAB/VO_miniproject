@@ -274,7 +274,7 @@ class VisualOdometryPipeline:
         """
         Process each new frame for continuous operation.
         """
-        S_new = S_prev.copy()
+        S_new = S_prev.copy() # TODO: Make sure we put new stuff in here
         T_new = T_prev.copy()
         curr_gray = frame  
 
