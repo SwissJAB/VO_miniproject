@@ -59,7 +59,7 @@ class VisualOdometryVisualizer:
         self.canvas.draw()
 
         # Extract the image from the canvas as a numpy array
-        frame = np.frombuffer(self.canvas.tostring_rgb(), dtype=np.uint8)
+        frame = np.frombuffer(self.canvas.tostring_argb(), dtype=np.uint8)
 
         # Get the canvas size from the figure (in pixels)
         width, height = self.fig.canvas.get_width_height()
@@ -67,11 +67,15 @@ class VisualOdometryVisualizer:
         # Ensure the canvas size matches the video frame size
         if (height, width) != self.frame_size:
             print(f"Canvas size {width}x{height} doesn't match the video frame size. Resizing...")
-            frame = frame.reshape((height, width, 3))
-            frame_resized = cv2.resize(frame, self.frame_size)  # Resize only if needed
+            frame = frame.reshape((height, width, 4))  # ARGB format (4 channels)
+            # Manually extract RGB channels from ARGB format
+            frame_rgb = frame[:, :, 1:4]  # Extract RGB channels (skip alpha)
+            frame_resized = cv2.resize(frame_rgb, self.frame_size)  # Resize only if needed
         else:
-            frame = frame.reshape((height, width, 3))
-            frame_resized = frame
+            frame = frame.reshape((height, width, 4))  # ARGB format (4 channels)
+            # Manually extract RGB channels from ARGB format
+            frame_rgb = frame[:, :, 1:4]  # Extract RGB channels (skip alpha)
+            frame_resized = frame_rgb
 
         # Check if the frame size matches the expected size
         expected_size = self.frame_size[0] * self.frame_size[1] * 3
