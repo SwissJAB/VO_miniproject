@@ -38,3 +38,11 @@ RANSAC:
   prob: 0.999
   threshold: 2.0
 
+PNPRANSAC:
+  iterations: 100
+  reprojection_error: 8.0
+  prob: 0.999
+
+CONT_VO:
+  baseline_angle_thresh: 5 # Degree threshold for baseline angle
+
