@@ -107,7 +107,7 @@ class VisualOdometryPipeline:
             self.global_poses.append(T_WC_i)
             print("X:", S_i['X'].shape)
             print("P:", S_i['P'].shape)
-            print("T:", len(S_i['T']))
+            print("T:", S_i['T'].shape)
             print("C:", S_i['C'].shape)
             print("F:", S_i['F'].shape)
 
@@ -116,7 +116,7 @@ class VisualOdometryPipeline:
             prev_frame = frame
             self.visualizer.update_visualizations(S_i['X'], T_WC_i['t'], frame, S_i['P'])
             print("----------------------------------------CONT----------------------------------------")
-            print("S: ", S_prev)
+            # print("S: ", S_prev)
             print("T: ", T_prev)
             print('----------------------------------------CONT----------------------------------------')
         
@@ -297,8 +297,9 @@ class VisualOdometryPipeline:
             tracked_candidate_keypoints = tracked_candidate_keypoints.reshape(-1, 2)
             S_new['C'] = tracked_candidate_keypoints[status.flatten() == 1]
             S_new['C'] = S_new['C'].T
+            print("T shape", S_prev['T'].shape)
+            print("F shape", S_prev['F'].shape)
             S_new['F'] = S_prev['F'][:, status.flatten() == 1]
-            S_prev['T'] = np.asarray(S_prev['T'])
             S_new['T'] = S_prev['T'][:, status.flatten() == 1]
 
             # Find new candidate keypoints
@@ -311,7 +312,6 @@ class VisualOdometryPipeline:
         
         # Add the new candidate keypoints to the candidate keypoints
         print("Candidate keypoints shape:", candidate_keypoints.shape)
-        print("S_new['C'] shape:", S_new['C'].shape)
         S_new['C'] = np.c_[S_new['C'], candidate_keypoints]
         # Add the new candidate keypoints to the first observation
         S_new['F'] = np.c_[S_new['F'], candidate_keypoints]
@@ -366,7 +366,7 @@ class VisualOdometryPipeline:
             T_new_repeated = np.tile(T_new, (len(candidate_keypoints[1]), 1))
             print("T_new_repeated shape:", T_new_repeated.shape)
 
-            S_new['T'] = np.c_[S_prev['T'], T_new_repeated.T]
+            S_new['T'] = np.c_[S_new['T'], T_new_repeated.T]
             return S_new, T_new
         else:
             print("Pose was not calculated.")
