@@ -61,6 +61,25 @@ class VisualOdometryPipeline:
         self.t = None
         self.P = None
 
+
+    def initialize_state(self, keypoints, landmarks, R, t):
+        """
+        Initialize the state with keypoints, landmarks, and pose.
+        
+        Args:
+            keypoints (np.ndarray): Initial keypoints (2, N)
+            landmarks (np.ndarray): Initial 3D landmarks (3, N)
+            R (np.ndarray): Initial rotation matrix (3, 3)
+            t (np.ndarray): Initial translation vector (3, 1)
+        """
+        # Convert 2D keypoints to homogeneous coordinates (3, N)
+        keypoints_homogeneous = np.r_[keypoints, np.ones((1, keypoints.shape[1]))]  # (3, N)
+        self.matched_keypoints2 = keypoints_homogeneous
+
+        self.P = landmarks
+        self.R = R
+        self.t = t
+
     def run(self):
         """
         Execute the entire visual odometry pipeline in order:
@@ -77,6 +96,20 @@ class VisualOdometryPipeline:
         self._decompose_E()
         self._triangulate()
         self._visualize()
+
+        self.initialize_state(
+            self.matched_keypoints2[:2],
+            self.P,
+            self.R,
+            self.t
+        )
+
+        # Continuous Operation Phase
+        for frame in self._get_next_frames():
+            # Show the next frame
+            self._process_frame(frame)
+            self.img2 = frame
+            self._visualize()
 
     def _detect_and_compute(self):
         """
@@ -300,9 +333,91 @@ class VisualOdometryPipeline:
         ax_img2.scatter(self.matched_keypoints2[0, :], self.matched_keypoints2[1, :],
                         color='y', marker='s')
         ax_img2.set_title("Image 2")
-
+        self.img1 = self.img2
         plt.show()
 
+    # Main part of the continuous operation
+    # TODO: This is missing the logic for adding new landmarks.
+    def _process_frame(self, frame):
+        """
+        Process each new frame for continuous operation.
+        """
+        curr_gray = frame  
+
+        prev_keypoints = self.matched_keypoints2[:2, :].T.reshape(-1, 1, 2).astype(np.float32)  # (N, 1, 2)
+        
+        print(f"Tracking {len(prev_keypoints)} keypoints...")  # Debugging
+        
+        # Track keypoints
+        valid_prev_keypoints, valid_curr_keypoints, valid_landmarks = track_keypoints(
+            self.img2, curr_gray, prev_keypoints, self.P
+        )
+        valid_prev_keypoints = valid_prev_keypoints.reshape(-1, 2)
+        valid_curr_keypoints = valid_curr_keypoints.reshape(-1, 2)
+
+        # Use PnP with ransac
+        landmarks = valid_landmarks
+        landmarks = landmarks[:, :3]  # Take only the first 3 columns (x, y, z)
+        success, rvec, tvec, inliers = cv2.solvePnPRansac(
+            landmarks,  # 3D
+            valid_curr_keypoints,  # 2D
+            self.K,
+            None,
+            iterationsCount=100,
+            reprojectionError=8.0,
+            confidence=self.config['RANSAC']['prob'],
+            flags=cv2.SOLVEPNP_EPNP
+        )
+
+        if success:
+            R, _ = cv2.Rodrigues(rvec)
+            t = tvec.flatten()
+            self.R = R
+            self.t = t
+            # TODO: Output of this is not good. At the start i think it is acceptable, then it gets horrible at some point.
+            # Might be because there are almost no landmarks left anymore at some point
+            print("Pose:")
+            print(R)
+            print(t)
+            # Filter valid keypoints using the inliers from solvePnPRansac
+            valid_curr_keypoints = valid_curr_keypoints[inliers.ravel()]
+            valid_prev_keypoints = valid_prev_keypoints[inliers.ravel()]
+            valid_landmarks = valid_landmarks[inliers.ravel()]
+
+            # Convert into homogeneous coordinates
+            valid_prev_keypoints = np.r_[valid_prev_keypoints.T, np.ones((1, valid_prev_keypoints.shape[0]))]
+            valid_curr_keypoints = np.r_[valid_curr_keypoints.T, np.ones((1, valid_curr_keypoints.shape[0]))]
+
+            # Update keypoints
+            self.matched_keypoints1 = valid_prev_keypoints
+            self.matched_keypoints2 = valid_curr_keypoints
+            self.P = valid_landmarks.T
+        else:
+            print("Pose konnte nicht berechnet werden.")
+
+    def _get_next_frames(self):
+        """
+        Generator to yield frames from the dataset for continuous operation.
+        """
+        dataset_path = os.path.join(self.data_rootdir, self.dataset_curr, 'images')
+        image_files = sorted([
+            os.path.join(dataset_path, f) 
+            for f in os.listdir(dataset_path) 
+            if f.endswith(('.png', '.jpg', '.jpeg'))
+        ])
+
+        init_img_2_path = self.config["DATA"]["init_img_2"]
+        init_img_2_filename = os.path.basename(init_img_2_path)
+        image_filenames = [os.path.basename(f) for f in image_files]
+
+        start_index = image_filenames.index(init_img_2_filename)
+        # Skip the firstframes (used for initialization)
+        for img_path in image_files[start_index:]:
+            frame = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+            if frame is None:
+                print(f"Failed to load {img_path}. Skipping...")
+                continue
+            yield frame
 
 if __name__ == "__main__":
     pipeline = VisualOdometryPipeline(config_path='Code/config.yaml')
