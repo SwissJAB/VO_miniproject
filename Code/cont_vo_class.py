@@ -54,8 +54,7 @@ class VisualOdometryPipeline:
 
 
     def initialize(self):
-        # TODO: This has the image references hardcoded inside the function calls. Should be fixed
-        key1, desc1, key2, desc2 = self._detect_and_compute()
+        key1, desc1, key2, desc2 = self._detect_and_compute_init()
         print("key1 shape, key2 shape, desc1 shape, desc2 shape", key1.shape, key2.shape, desc1.shape, desc2.shape)
         matched_keys1, matched_keys2 = self._match_descriptors(key1, desc1, key2, desc2)
         print("matched_keys1 shape, matched_keys2 shape", matched_keys1.shape, matched_keys2.shape)
@@ -117,65 +116,52 @@ class VisualOdometryPipeline:
         self.visualizer.close()
         return self.global_poses
 
-    def _detect_and_compute(self):
+    def _detect_and_compute_init(self):
         """
         Detect keypoints and compute descriptors based on self.descriptor_name.
         """
         print(f"Descriptor: {self.descriptor_name}")
         
         if self.descriptor_name == 'harris':
-            key1, desc1, key2, desc2, = self._detect_harris()
+            key1, desc1 = self._detect_harris(self.img1) 
+            key2, desc2 = self._detect_harris(self.img2)
         elif self.descriptor_name == 'shi_tomasi':
-            key1, desc1, key2, desc2 = self._detect_shi_tomasi()
+            key1, desc1 = self._detect_shi_tomasi(self.img1) 
+            key2, desc2 = self._detect_shi_tomasi(self.img2)
         elif self.descriptor_name == 'sift':
-            key1, desc1, key2, desc2 = self._detect_sift()
+            key1, desc1 = self._detect_sift(self.img1)
+            key2, desc2 = self._detect_sift(self.img2)
         else:
             raise ValueError("Invalid descriptor type")
         
         return key1, desc1, key2, desc2
 
-    def _detect_harris(self):
+    def _detect_harris(self, img):
         print("Harris")
         # For speed, read parameters only once into local variables
         harris_cfg = self.config['HARRIS']
-        descriptors1, keypoints1 = get_descriptors_harris(
-            self.img1,
+        descriptors, keypoints = get_descriptors_harris(
+            img,
             harris_cfg['corner_patch_size'], 
             harris_cfg['kappa'], 
             harris_cfg['num_keypoints'], 
             harris_cfg['nonmaximum_supression_radius'], 
             harris_cfg['descriptor_radius']
         )
+        return keypoints, descriptors
 
-        descriptors2, keypoints2 = get_descriptors_harris(
-            self.img2,
-            harris_cfg['corner_patch_size'], 
-            harris_cfg['kappa'],
-            harris_cfg['num_keypoints'], 
-            harris_cfg['nonmaximum_supression_radius'],
-            harris_cfg['descriptor_radius']
-        )
-        return keypoints1, descriptors1, keypoints2, descriptors2
-
-    def _detect_shi_tomasi(self):
+    def _detect_shi_tomasi(self, img):
         st_cfg = self.config['SHI_TOMASI']
-        descriptors1, keypoints1 = get_descriptors_st(
-            self.img1,
+        descriptors, keypoints = get_descriptors_st(
+            img,
             st_cfg['corner_patch_size'], 
             st_cfg['num_keypoints'],
             st_cfg['nonmaximum_supression_radius'], 
             st_cfg['descriptor_radius']
         )
-        descriptors2, keypoints2 = get_descriptors_st(
-            self.img2,
-            st_cfg['corner_patch_size'], 
-            st_cfg['num_keypoints'],
-            st_cfg['nonmaximum_supression_radius'], 
-            st_cfg['descriptor_radius']
-        )
-        return keypoints1, descriptors1, keypoints2, descriptors2
+        return keypoints, descriptors
 
-    def _detect_sift(self):
+    def _detect_sift(self, img):
         sift_cfg = self.config['SIFT']
         sift = cv2.SIFT_create(
             nfeatures=sift_cfg['nfeatures'],
@@ -183,18 +169,13 @@ class VisualOdometryPipeline:
             sigma=sift_cfg['sigma'],
             nOctaveLayers=sift_cfg['n_otave_layers']
         )
-        kp1, desc1 = sift.detectAndCompute(self.img1, None)
-        kp2, desc2 = sift.detectAndCompute(self.img2, None)
+        kp1, desc1 = sift.detectAndCompute(img, None)
 
         # Convert to np arrays
-        keypoints1_np = np.array([kp.pt for kp in kp1]).T  # shape (2, N1)
-        keypoints2_np = np.array([kp.pt for kp in kp2]).T  # shape (2, N2)
-        descriptors1_t = desc1.T                            # shape (128, N1)
-        descriptors2_t = desc2.T                            # shape (128, N2)
-        descriptors1 = descriptors1_t
-        descriptors2 = descriptors2_t
+        keypoints = np.array([kp.pt for kp in kp1]).T  # shape (2, N1)
+        descriptors = desc1.T                       # shape (128, N1)
 
-        return keypoints1_np, descriptors1, keypoints2_np, descriptors2
+        return keypoints, descriptors
          
     def _match_descriptors(self, keys1, desc1, keys2, desc2):
         """
