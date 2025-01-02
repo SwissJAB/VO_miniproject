@@ -187,13 +187,10 @@ class VisualOdometryPipeline:
         keypoints2_np = np.array([kp.pt for kp in kp2]).T  # shape (2, N2)
         descriptors1_t = desc1.T                            # shape (128, N1)
         descriptors2_t = desc2.T                            # shape (128, N2)
-
-        keypoints1 = np.array([keypoints1_np[1], keypoints1_np[0]])  # swapped to match other things, not great TODO: fix
-        keypoints2 = np.array([keypoints2_np[1], keypoints2_np[0]])
         descriptors1 = descriptors1_t
         descriptors2 = descriptors2_t
 
-        return keypoints1, descriptors1, keypoints2, descriptors2
+        return keypoints1_np, descriptors1, keypoints2_np, descriptors2
          
     def _match_descriptors(self, keys1, desc1, keys2, desc2):
         """
@@ -215,8 +212,6 @@ class VisualOdometryPipeline:
 
         query_indices = np.nonzero(matches >= 0)[0]
         match_indices = matches[query_indices]
-        # print("query_indices shape:", query_indices.shape)
-        # print("match_indices shape:", match_indices.shape)
 
         matched_keypoints1 = keys1[:, match_indices]
         matched_keypoints2 = keys2[:, query_indices]
@@ -225,9 +220,8 @@ class VisualOdometryPipeline:
         matched_keypoints1 = np.r_[matched_keypoints1, np.ones((1, matched_keypoints1.shape[1]))]
         matched_keypoints2 = np.r_[matched_keypoints2, np.ones((1, matched_keypoints2.shape[1]))]
 
-        # Switch the coordinates if truly need them swapped again TODO: This is not great yet
-        matched_keypoints1 = np.array([matched_keypoints1[1], matched_keypoints1[0], matched_keypoints1[2]])
-        matched_keypoints2 = np.array([matched_keypoints2[1], matched_keypoints2[0], matched_keypoints2[2]])
+        matched_keypoints1 = np.array([matched_keypoints1[0], matched_keypoints1[1], matched_keypoints1[2]])
+        matched_keypoints2 = np.array([matched_keypoints2[0], matched_keypoints2[1], matched_keypoints2[2]])
         print("matched_keypoints2:\n", matched_keypoints2)
         return matched_keypoints1, matched_keypoints2
 
@@ -305,7 +299,7 @@ class VisualOdometryPipeline:
         
         # Track keypoints
         valid_prev_keypoints, valid_curr_keypoints, valid_landmarks = track_keypoints(
-            self.img2, curr_gray, prev_keypoints, S_prev['X'] # TODO: Correct here? Was self.P before
+            self.img2, curr_gray, prev_keypoints, S_prev['X']
         )
         valid_prev_keypoints = valid_prev_keypoints.reshape(-1, 2)
         valid_curr_keypoints = valid_curr_keypoints.reshape(-1, 2)
@@ -325,17 +319,15 @@ class VisualOdometryPipeline:
         )
 
         if success:
-            R, _ = cv2.Rodrigues(rvec)
-            t = tvec.flatten()
-            self.R = R
-            self.t = t
-            T_new['R'] = R
-            T_new['t'] = t
+            R_mat, _ = cv2.Rodrigues(rvec)
+            t_flat = tvec.flatten()
+            T_new['R'] = R_mat
+            T_new['t'] = t_flat
             # TODO: Output of this is not good. At the start i think it is acceptable, then it gets horrible at some point.
             # Might be because there are almost no landmarks left anymore at some point
             print("Pose:")
-            print(R)
-            print(t)
+            print(R_mat)
+            print(t_flat)
             # Filter valid keypoints using the inliers from solvePnPRansac
             valid_curr_keypoints = valid_curr_keypoints[inliers.ravel()]
             valid_prev_keypoints = valid_prev_keypoints[inliers.ravel()]
@@ -349,10 +341,6 @@ class VisualOdometryPipeline:
             S_new['P'] = valid_curr_keypoints
             S_new['X'] = valid_landmarks.T
             return S_new, T_new
-
-            # self.matched_keypoints1 = valid_prev_keypoints
-            # self.matched_keypoints2 = valid_curr_keypoints
-            # self.P = valid_landmarks.T
         else:
             print("Pose konnte nicht berechnet werden.")
 
