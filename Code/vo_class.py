@@ -97,6 +97,7 @@ class VisualOdometryPipeline:
         self._triangulate()
         self._visualize()
 
+
         self.initialize_state(
             self.matched_keypoints2[:2],
             self.P,
@@ -110,6 +111,29 @@ class VisualOdometryPipeline:
             self._process_frame(frame)
             self.img2 = frame
             self._visualize()
+        
+        if self.config["PLOTS"]["save"]:
+            # create a video from the images and then save that video in the same folder and delete the images
+
+            # create a video from the images
+            img_folder = os.path.join(self.config["PLOTS"]["save_path"], "images4video")
+            video_path = os.path.join(self.config["PLOTS"]["save_path"], "video.mp4")
+            
+            # Check if there are any images in the folder
+            if any(fname.endswith('.png') for fname in os.listdir(img_folder)):
+                # print current working directory
+                print("Current working directory:", os.getcwd())
+                
+                os.system(f"ffmpeg -r 1 -pattern_type glob -i '{img_folder}/*.png' -vcodec mpeg4 -y {video_path}")
+
+                # delete the images
+                for img_file in os.listdir(img_folder):
+                    img_path = os.path.join(img_folder, img_file)
+                    if os.path.isfile(img_path) and img_file.endswith('.png'):
+                        os.remove(img_path)
+            else:
+                print(f"No images found in {img_folder}. Skipping video creation.")
+
 
     def _detect_and_compute(self):
         """
@@ -334,7 +358,14 @@ class VisualOdometryPipeline:
                         color='y', marker='s')
         ax_img2.set_title("Image 2")
         self.img1 = self.img2
-        plt.show()
+
+        if self.config["PLOTS"]["save"]:
+            save_dir = os.path.join(self.config["PLOTS"]["save_path"], "images4video")
+            os.makedirs(save_dir, exist_ok=True)
+            plt.savefig(os.path.join(save_dir, str(int(time.time()*1000)) + ".png"))
+        
+        if self.config["PLOTS"]["show"]:
+            plt.show()
 
     # Main part of the continuous operation
     # TODO: This is missing the logic for adding new landmarks.
