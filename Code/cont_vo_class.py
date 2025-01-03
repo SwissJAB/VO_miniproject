@@ -5,7 +5,7 @@ import time
 import yaml
 import os
 
-from descriptor_utils import get_descriptors_harris, get_descriptors_st
+from descriptor_utils import get_descriptors_harris, get_descriptors_st, get_descriptors_harris_cv2, get_descriptors_st_cv2
 from get_descriptors.match_descriptors import matchDescriptors
 from get_descriptors.plot_matches import plotMatches
 
@@ -118,6 +118,13 @@ class VisualOdometryPipeline:
             print("----------------------------------------CONT----------------------------------------")
             # print("S: ", S_prev)
             print("T: ", T_prev)
+            if self.config["PLOTS"]["save"]:
+                # save pose in txt file of current descriptor and dataset
+                pose_path = os.path.join(self.config["PLOTS"]["save_path"], f"pose_{self.descriptor_name}_{self.dataset_curr}.txt")
+                with open(pose_path, 'a') as f:
+                    f.write(" ".join(map(str, T_prev['R'][0,:])) + " " + str(T_prev['t'][0])+ " ")
+                    f.write(" ".join(map(str, T_prev['R'][1,:])) + " " + str(T_prev['t'][1])+ " ")
+                    f.write(" ".join(map(str, T_prev['R'][2,:])) + " " + str(T_prev['t'][2]) + "\n")
             print('----------------------------------------CONT----------------------------------------')
         
         self.visualizer.close()
@@ -144,31 +151,69 @@ class VisualOdometryPipeline:
         return key1, desc1, key2, desc2
 
     def _detect_harris(self, img):
+        if self.config["PLOTS"]["save"]:
+            start_time = time.time()
         print("Harris")
         # For speed, read parameters only once into local variables
         harris_cfg = self.config['HARRIS']
-        descriptors, keypoints = get_descriptors_harris(
-            img,
-            harris_cfg['corner_patch_size'], 
-            harris_cfg['kappa'], 
-            harris_cfg['num_keypoints'], 
-            harris_cfg['nonmaximum_supression_radius'], 
-            harris_cfg['descriptor_radius']
-        )
+        if harris_cfg['cv2']:
+            descriptors, keypoints = get_descriptors_harris_cv2(
+                img,
+                harris_cfg['corner_patch_size'], 
+                harris_cfg['kappa'], 
+                harris_cfg['num_keypoints'], 
+                harris_cfg['nonmaximum_supression_radius'], 
+                harris_cfg['descriptor_radius']
+            )
+        else:
+            descriptors, keypoints = get_descriptors_harris(
+                img,
+                harris_cfg['corner_patch_size'], 
+                harris_cfg['kappa'], 
+                harris_cfg['num_keypoints'], 
+                harris_cfg['nonmaximum_supression_radius'], 
+                harris_cfg['descriptor_radius']
+            )
+
+        if self.config["PLOTS"]["save"]:
+            end_time = time.time()
+            save_path = self.config["PLOTS"]["save_path"]
+            with open(os.path.join(save_path, f"time_{self.descriptor_name}.txt"), 'a') as f:
+                f.write(f"{end_time - start_time}\n")
         return keypoints, descriptors
 
     def _detect_shi_tomasi(self, img):
+        if self.config["PLOTS"]["save"]:
+            start_time = time.time()
         st_cfg = self.config['SHI_TOMASI']
-        descriptors, keypoints = get_descriptors_st(
-            img,
-            st_cfg['corner_patch_size'], 
-            st_cfg['num_keypoints'],
-            st_cfg['nonmaximum_supression_radius'], 
-            st_cfg['descriptor_radius']
-        )
+
+        if st_cfg['cv2']:
+            descriptors, keypoints = get_descriptors_st_cv2(
+                img,
+                st_cfg['corner_patch_size'], 
+                st_cfg['num_keypoints'],
+                st_cfg['nonmaximum_supression_radius'], 
+                st_cfg['descriptor_radius']
+            )
+        else:
+            descriptors, keypoints = get_descriptors_st(
+                img,
+                st_cfg['corner_patch_size'], 
+                st_cfg['num_keypoints'],
+                st_cfg['nonmaximum_supression_radius'], 
+                st_cfg['descriptor_radius']
+            )
+        if self.config["PLOTS"]["save"]:
+            end_time = time.time()
+            save_path = self.config["PLOTS"]["save_path"]
+            with open(os.path.join(save_path, f"time_{self.descriptor_name}.txt"), 'a') as f:
+                f.write(f"{end_time - start_time}\n")
+    
         return keypoints, descriptors
 
     def _detect_sift(self, img):
+        if self.config["PLOTS"]["save"]:
+            start_time = time.time()
         sift_cfg = self.config['SIFT']
         sift = cv2.SIFT_create(
             nfeatures=sift_cfg['nfeatures'],
@@ -181,6 +226,12 @@ class VisualOdometryPipeline:
         # Convert to np arrays
         keypoints = np.array([kp.pt for kp in kp1]).T  # shape (2, N1)
         descriptors = desc1.T                       # shape (128, N1)
+
+        if self.config["PLOTS"]["save"]:
+            end_time = time.time()
+            save_path = self.config["PLOTS"]["save_path"]
+            with open(os.path.join(save_path, f"time_{self.descriptor_name}.txt"), 'a') as f:
+                f.write(f"{end_time - start_time}\n")
 
         return keypoints, descriptors
          
@@ -312,6 +363,7 @@ class VisualOdometryPipeline:
         
         # Add the new candidate keypoints to the candidate keypoints
         print("Candidate keypoints shape:", candidate_keypoints.shape)
+        candidate_keypoints = self._remove_duplicates(candidate_keypoints, S_new['P'])
         candidate_keypoints = self._remove_duplicates(candidate_keypoints, S_new['C'])
         print("Candidate keypoints shape after removing duplicates:", candidate_keypoints.shape)
         S_new['C'] = np.c_[S_new['C'], candidate_keypoints]
@@ -376,10 +428,8 @@ class VisualOdometryPipeline:
                     f = S_new['F'][:, i].reshape(2, 1)  # shape (2,1)
 
                     t = S_new['T'][:, i]
-
-                    angle_c = self._compute_angle(f, c, t[0], T_new.copy(), self.K)
-
-                    if angle_c > np.deg2rad(self.baseline_angle_thresh):
+                    angle_c = self._compute_angle(f, c, t[0].copy(), T_new.copy(), self.K)
+                    if angle_c > self.baseline_angle_thresh:
                         M1 = self.K @ np.c_[t[0]['R'], t[0]['t']]
                         M2 = self.K @ np.c_[T_new['R'], T_new['t']]
                         homogeneous_f = np.vstack((f, [1]))
@@ -430,7 +480,7 @@ class VisualOdometryPipeline:
             S_new['X'] = valid_landmarks.T
 
             if len(new_3d_points) > 0:
-                print(f"If 2: Adding {len(new_3d_points)} new landmarks.")
+                print(f"If 2: Adding {new_3d_points.shape[1]} new landmarks.")
                 print("New 3D points shape:", new_3d_points.shape)
                 print("New 3D points 2D shape:", new_3d_points_2d_h.shape)
                 S_new['P'] = np.c_[S_new['P'], new_3d_points_2d_h]

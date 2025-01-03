@@ -97,6 +97,7 @@ class VisualOdometryPipeline:
         self._triangulate()
         self._visualize()
 
+
         self.initialize_state(
             self.matched_keypoints2[:2],
             self.P,
@@ -110,6 +111,29 @@ class VisualOdometryPipeline:
             self._process_frame(frame)
             self.img2 = frame
             self._visualize()
+        
+        if self.config["PLOTS"]["save"]:
+            # create a video from the images and then save that video in the same folder and delete the images
+
+            # create a video from the images
+            img_folder = os.path.join(self.config["PLOTS"]["save_path"], "images4video")
+            video_path = os.path.join(self.config["PLOTS"]["save_path"], "video.mp4")
+            
+            # Check if there are any images in the folder
+            if any(fname.endswith('.png') for fname in os.listdir(img_folder)):
+                # print current working directory
+                print("Current working directory:", os.getcwd())
+                
+                os.system(f"ffmpeg -r 1 -pattern_type glob -i '{img_folder}/*.png' -vcodec mpeg4 -y {video_path}")
+
+                # delete the images
+                for img_file in os.listdir(img_folder):
+                    img_path = os.path.join(img_folder, img_file)
+                    if os.path.isfile(img_path) and img_file.endswith('.png'):
+                        os.remove(img_path)
+            else:
+                print(f"No images found in {img_folder}. Skipping video creation.")
+
 
     def _detect_and_compute(self):
         """
@@ -128,6 +152,9 @@ class VisualOdometryPipeline:
 
     def _detect_harris(self):
         print("Harris")
+
+        if self.config["PLOTS"]["save"]:
+            start_time = time.time()
         # For speed, read parameters only once into local variables
         harris_cfg = self.config['HARRIS']
         self.descriptors1, self.keypoints1 = get_descriptors_harris(
@@ -138,7 +165,6 @@ class VisualOdometryPipeline:
             harris_cfg['nonmaximum_supression_radius'], 
             harris_cfg['descriptor_radius']
         )
-
         self.descriptors2, self.keypoints2 = get_descriptors_harris(
             self.img2,
             harris_cfg['corner_patch_size'], 
@@ -147,8 +173,15 @@ class VisualOdometryPipeline:
             harris_cfg['nonmaximum_supression_radius'],
             harris_cfg['descriptor_radius']
         )
+        if self.config["PLOTS"]["save"]:
+            end_time = time.time()
+            save_path = self.config["PLOTS"]["save_path"]
+            with open(os.path.join(save_path, f"time_{self.descriptor_name}.txt"), 'a') as f:
+                f.write(f"{end_time - start_time}\n")
 
     def _detect_shi_tomasi(self):
+        if self.config["PLOTS"]["save"]:
+            start_time = time.time()
         st_cfg = self.config['SHI_TOMASI']
         self.descriptors1, self.keypoints1 = get_descriptors_st(
             self.img1,
@@ -164,12 +197,21 @@ class VisualOdometryPipeline:
             st_cfg['nonmaximum_supression_radius'], 
             st_cfg['descriptor_radius']
         )
+        if self.config["PLOTS"]["save"]:
+            end_time = time.time()
+            save_path = self.config["PLOTS"]["save_path"]
+            with open(os.path.join(save_path, f"time_{self.descriptor_name}.txt"), 'a') as f:
+                f.write(f"{end_time - start_time}\n")
+
+                
         print("shi keypoints1 shape:", self.keypoints1.shape)
         print("shi keypoints2 shape:", self.keypoints2.shape)
         print("shi descriptors1 shape:", self.descriptors1.shape)
         print("shi descriptors2 shape:", self.descriptors2.shape)
 
     def _detect_sift(self):
+        if self.config["PLOTS"]["save"]:
+            start_time = time.time()
         sift_cfg = self.config['SIFT']
         sift = cv2.SIFT_create(
             nfeatures=sift_cfg['nfeatures'],
@@ -190,6 +232,11 @@ class VisualOdometryPipeline:
         self.keypoints2 = np.array([keypoints2_np[1], keypoints2_np[0]])
         self.descriptors1 = descriptors1_t
         self.descriptors2 = descriptors2_t
+        if self.config["PLOTS"]["save"]:
+            end_time = time.time()
+            save_path = self.config["PLOTS"]["save_path"]
+            with open(os.path.join(save_path, f"time_{self.descriptor_name}.txt"), 'a') as f:
+                f.write(f"{end_time - start_time}\n")
 
         print("SIFT keypoints1 shape:", self.keypoints1.shape)
         print("SIFT keypoints2 shape:", self.keypoints2.shape)
@@ -334,7 +381,14 @@ class VisualOdometryPipeline:
                         color='y', marker='s')
         ax_img2.set_title("Image 2")
         self.img1 = self.img2
-        plt.show()
+
+        if self.config["PLOTS"]["save"]:
+            save_dir = os.path.join(self.config["PLOTS"]["save_path"], "images4video")
+            os.makedirs(save_dir, exist_ok=True)
+            plt.savefig(os.path.join(save_dir, str(int(time.time()*1000)) + ".png"))
+        
+        if self.config["PLOTS"]["show"]:
+            plt.show()
 
     # Main part of the continuous operation
     # TODO: This is missing the logic for adding new landmarks.
@@ -379,6 +433,14 @@ class VisualOdometryPipeline:
             print("Pose:")
             print(R)
             print(t)
+            if self.config["PLOTS"]["save"]:
+                # save pose in txt file of current descriptor and dataset
+                pose_path = os.path.join(self.config["PLOTS"]["save_path"], f"pose_{self.descriptor_name}_{self.dataset_curr}.txt")
+                with open(pose_path, 'a') as f:
+                    f.write(" ".join(map(str, R[0, :])) + " " + str(t[0])+ " ")
+                    f.write(" ".join(map(str, R[1, :])) + " " + str(t[1])+ " ")
+                    f.write(" ".join(map(str, R[2, :])) + " " + str(t[2]) + "\n")
+
             # Filter valid keypoints using the inliers from solvePnPRansac
             valid_curr_keypoints = valid_curr_keypoints[inliers.ravel()]
             valid_prev_keypoints = valid_prev_keypoints[inliers.ravel()]
