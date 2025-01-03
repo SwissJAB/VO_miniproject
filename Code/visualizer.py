@@ -12,9 +12,9 @@ class VisualOdometryVisualizer:
         self.ax2 = self.fig.add_subplot(122)  # 2D image plot
 
         # Define fixed axis limits for the 3D plot
-        self.ax1.set_xlim([-50, 50])  # Set X-axis limit
-        self.ax1.set_ylim([-50, 50])  # Set Y-axis limit
-        self.ax1.set_zlim([-50, 50])  # Set Z-axis limit
+        self.ax1.set_xlim([-10, 60])  # Set X-axis limit
+        self.ax1.set_ylim([-10, 60])  # Set Y-axis limit
+        self.ax1.set_zlim([-10, 10])  # Set Z-axis limit
 
     def update_visualizations(self, landmarks_3d, camera_pose, image, keypoints):
         """
