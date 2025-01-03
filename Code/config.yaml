@@ -47,3 +47,7 @@ CONT_VO:
   baseline_angle_thresh: 25 # Degree threshold for baseline angle
   kp_dist_thresh: 8.0 # min distance between keypoints 
 
+PLOTS:
+  show: True
+  save: True
+  save_path: 'Code/plots/'

@@ -97,7 +97,6 @@ class VisualOdometryPipeline:
         self._triangulate()
         self._visualize()
 
-
         self.initialize_state(
             self.matched_keypoints2[:2],
             self.P,
@@ -111,29 +110,6 @@ class VisualOdometryPipeline:
             self._process_frame(frame)
             self.img2 = frame
             self._visualize()
-        
-        if self.config["PLOTS"]["save"]:
-            # create a video from the images and then save that video in the same folder and delete the images
-
-            # create a video from the images
-            img_folder = os.path.join(self.config["PLOTS"]["save_path"], "images4video")
-            video_path = os.path.join(self.config["PLOTS"]["save_path"], "video.mp4")
-            
-            # Check if there are any images in the folder
-            if any(fname.endswith('.png') for fname in os.listdir(img_folder)):
-                # print current working directory
-                print("Current working directory:", os.getcwd())
-                
-                os.system(f"ffmpeg -r 1 -pattern_type glob -i '{img_folder}/*.png' -vcodec mpeg4 -y {video_path}")
-
-                # delete the images
-                for img_file in os.listdir(img_folder):
-                    img_path = os.path.join(img_folder, img_file)
-                    if os.path.isfile(img_path) and img_file.endswith('.png'):
-                        os.remove(img_path)
-            else:
-                print(f"No images found in {img_folder}. Skipping video creation.")
-
 
     def _detect_and_compute(self):
         """
@@ -172,6 +148,9 @@ class VisualOdometryPipeline:
             harris_cfg['descriptor_radius']
         )
 
+        print("harris keypoints1 shape:", self.keypoints1.shape)
+        print("harris keypoints2 shape:", self.keypoints2.shape)
+
     def _detect_shi_tomasi(self):
         st_cfg = self.config['SHI_TOMASI']
         self.descriptors1, self.keypoints1 = get_descriptors_st(
@@ -190,8 +169,6 @@ class VisualOdometryPipeline:
         )
         print("shi keypoints1 shape:", self.keypoints1.shape)
         print("shi keypoints2 shape:", self.keypoints2.shape)
-        print("shi descriptors1 shape:", self.descriptors1.shape)
-        print("shi descriptors2 shape:", self.descriptors2.shape)
 
     def _detect_sift(self):
         sift_cfg = self.config['SIFT']
@@ -217,8 +194,7 @@ class VisualOdometryPipeline:
 
         print("SIFT keypoints1 shape:", self.keypoints1.shape)
         print("SIFT keypoints2 shape:", self.keypoints2.shape)
-        print("SIFT descriptors1 shape:", self.descriptors1.shape)
-        print("SIFT descriptors2 shape:", self.descriptors2.shape)
+
          
     def _match_descriptors(self):
         """
@@ -230,12 +206,32 @@ class VisualOdometryPipeline:
         else:
             match_lambda = self.config['SIFT']['match_lambda']
 
-        # matches is a 1D array with length = # of query descriptors
-        self.matches = matchDescriptors(
+        # See influence of match-lambda and the number of matches
+        nb_matches = [] 
+        mean_dists = []
+        std_dists = []
+        for match_lambda in np.arange(0, 100.1, 0.2):
+            # matches is a 1D array with length = # of query descriptors
+            self.matches, mean, std = matchDescriptors(
             self.descriptors2,  # Query
             self.descriptors1,  # Database
             match_lambda
-        )
+            )
+            nb_matches.append(np.sum(self.matches != -1))
+            mean_dists.append(mean)
+            std_dists.append(std)
+
+        
+        # Save nb_matches to a npy file
+        np.save(f'Code/plots/nb_matches_{self.descriptor_name.capitalize()}.npy', np.array(nb_matches))
+        np.save(f'Code/plots/mean_matches_{self.descriptor_name.capitalize()}.npy', np.array(mean_dists))
+        np.save(f'Code/plots/std_matches_{self.descriptor_name.capitalize()}.npy', np.array(std_dists))
+        plt.plot(np.arange(0, 100.1, 0.2), mean_dists)
+        plt.xlabel("Match Lambda")
+        plt.ylabel("Number of Matches")
+        plt.title(f"Influence of Match Lambda on Number of Matches for {self.descriptor_name.capitalize()}")
+        plt.show()
+
         print(f"Number of matches: {np.sum(self.matches != -1)}")
 
         query_indices = np.nonzero(self.matches >= 0)[0]
@@ -332,6 +328,8 @@ class VisualOdometryPipeline:
 
         # Display camera 2
         center_cam2_W = -self.R.T @ self.t
+        print(self.R.T)
+        print(self.t)
         drawCamera(ax_3d, center_cam2_W, self.R.T, length_scale=2)
         ax_3d.text(center_cam2_W[0]-0.1, center_cam2_W[1]-0.1, center_cam2_W[2]-0.1, 'Cam 2')
 
@@ -358,14 +356,7 @@ class VisualOdometryPipeline:
                         color='y', marker='s')
         ax_img2.set_title("Image 2")
         self.img1 = self.img2
-
-        if self.config["PLOTS"]["save"]:
-            save_dir = os.path.join(self.config["PLOTS"]["save_path"], "images4video")
-            os.makedirs(save_dir, exist_ok=True)
-            plt.savefig(os.path.join(save_dir, str(int(time.time()*1000)) + ".png"))
-        
-        if self.config["PLOTS"]["show"]:
-            plt.show()
+        plt.show()
 
     # Main part of the continuous operation
     # TODO: This is missing the logic for adding new landmarks.
@@ -410,14 +401,6 @@ class VisualOdometryPipeline:
             print("Pose:")
             print(R)
             print(t)
-            if self.config["PLOTS"]["save"]:
-                # save pose in txt file of current descriptor and dataset
-                pose_path = os.path.join(self.config["PLOTS"]["save_path"], f"pose_{self.descriptor_name}_{self.dataset_curr}.txt")
-                with open(pose_path, 'a') as f:
-                    f.write(" ".join(map(str, R[0, :])) + " " + str(t[0])+ " ")
-                    f.write(" ".join(map(str, R[1, :])) + " " + str(t[1])+ " ")
-                    f.write(" ".join(map(str, R[2, :])) + " " + str(t[2]) + "\n")
-
             # Filter valid keypoints using the inliers from solvePnPRansac
             valid_curr_keypoints = valid_curr_keypoints[inliers.ravel()]
             valid_prev_keypoints = valid_prev_keypoints[inliers.ravel()]
@@ -461,6 +444,3 @@ class VisualOdometryPipeline:
 if __name__ == "__main__":
     pipeline = VisualOdometryPipeline(config_path='Code/config.yaml')
     pipeline.run()
-
-
-
