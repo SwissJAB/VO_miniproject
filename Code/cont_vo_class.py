@@ -5,7 +5,7 @@ import time
 import yaml
 import os
 
-from descriptor_utils import get_descriptors_harris, get_descriptors_st
+from descriptor_utils import get_descriptors_harris, get_descriptors_st, get_descriptors_harris_cv2, get_descriptors_st_cv2
 from get_descriptors.match_descriptors import matchDescriptors
 from get_descriptors.plot_matches import plotMatches
 
@@ -156,14 +156,25 @@ class VisualOdometryPipeline:
         print("Harris")
         # For speed, read parameters only once into local variables
         harris_cfg = self.config['HARRIS']
-        descriptors, keypoints = get_descriptors_harris(
-            img,
-            harris_cfg['corner_patch_size'], 
-            harris_cfg['kappa'], 
-            harris_cfg['num_keypoints'], 
-            harris_cfg['nonmaximum_supression_radius'], 
-            harris_cfg['descriptor_radius']
-        )
+        if harris_cfg['cv2']:
+            descriptors, keypoints = get_descriptors_harris_cv2(
+                img,
+                harris_cfg['corner_patch_size'], 
+                harris_cfg['kappa'], 
+                harris_cfg['num_keypoints'], 
+                harris_cfg['nonmaximum_supression_radius'], 
+                harris_cfg['descriptor_radius']
+            )
+        else:
+            descriptors, keypoints = get_descriptors_harris(
+                img,
+                harris_cfg['corner_patch_size'], 
+                harris_cfg['kappa'], 
+                harris_cfg['num_keypoints'], 
+                harris_cfg['nonmaximum_supression_radius'], 
+                harris_cfg['descriptor_radius']
+            )
+
         if self.config["PLOTS"]["save"]:
             end_time = time.time()
             save_path = self.config["PLOTS"]["save_path"]
@@ -175,13 +186,23 @@ class VisualOdometryPipeline:
         if self.config["PLOTS"]["save"]:
             start_time = time.time()
         st_cfg = self.config['SHI_TOMASI']
-        descriptors, keypoints = get_descriptors_st(
-            img,
-            st_cfg['corner_patch_size'], 
-            st_cfg['num_keypoints'],
-            st_cfg['nonmaximum_supression_radius'], 
-            st_cfg['descriptor_radius']
-        )
+
+        if st_cfg['cv2']:
+            descriptors, keypoints = get_descriptors_st_cv2(
+                img,
+                st_cfg['corner_patch_size'], 
+                st_cfg['num_keypoints'],
+                st_cfg['nonmaximum_supression_radius'], 
+                st_cfg['descriptor_radius']
+            )
+        else:
+            descriptors, keypoints = get_descriptors_st(
+                img,
+                st_cfg['corner_patch_size'], 
+                st_cfg['num_keypoints'],
+                st_cfg['nonmaximum_supression_radius'], 
+                st_cfg['descriptor_radius']
+            )
         if self.config["PLOTS"]["save"]:
             end_time = time.time()
             save_path = self.config["PLOTS"]["save_path"]
