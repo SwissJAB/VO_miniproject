@@ -122,13 +122,13 @@ class VisualOdometryPipeline:
         ### END SIFT stuff second try ###
 
         S_1 = {
-            'P': matched_pts2_np_filtered.T,        # shape (2, M)
-            'X': landmarks,                         # shape (3, M)
+            'P': matched_pts2_np_filtered,          # shape (M, 2)
+            'X': landmarks.T,                       # shape (M, 3)
     
 
-            'C': np.empty((2, 0)),                  # empty at the beginning
-            'F': np.empty((2, 0)),                  # first obs of each candidate
-            'T': np.empty((1,0))                    # store the pose at first obs
+            'C': np.empty((0, 2)),                  # Nc, 2
+            'F': np.empty((0, 2)),                  # Nc, 2
+            'T': np.empty((0, 1))                   # Nc, 1
         }
         T_WC_1 = {
             'R': Rot_mat,
@@ -226,7 +226,6 @@ class VisualOdometryPipeline:
     
         return keypoints, descriptors
 
-
     def _detect_sift(self, img, debug=True):
         if self.config["PLOTS"]["save"]:
             start_time = time.time()
@@ -276,9 +275,6 @@ class VisualOdometryPipeline:
             cv2.imshow("Matches", matched_img)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
-
-        print("pts1 shape:", len(pts1))
-        print("pts1: ", pts1)
 
         return pts1, pts2 # good[i][0].queryIdx, good[i][0].trainIdx for accessing match at index i
 
@@ -335,16 +331,16 @@ class VisualOdometryPipeline:
                         criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01))
         
         # Calculate optical flow
-        if S_prev['C'].shape[1] > 0:
-            S_prev['C'] = S_prev['C'][:2, :].T.reshape(-1, 1, 2).astype(np.float32)
-            tracked_candidate_keypoints, status, _ = cv2.calcOpticalFlowPyrLK(prev_frame, curr_gray, S_prev['C'], None, **lk_params)
-            tracked_candidate_keypoints = tracked_candidate_keypoints.reshape(-1, 2)
+        if S_prev['C'].shape[0] > 0:
+            S_prev['C'] = S_prev['C']
+            tracked_candidate_keypoints, status, _ = cv2.calcOpticalFlowPyrLK(prev_frame, curr_gray, np.float32(S_prev['C']), None, **lk_params)
+            print("Tracked candidate keypoints shape:", tracked_candidate_keypoints.shape)
+            #tracked_candidate_keypoints = tracked_candidate_keypoints.reshape(-1, 2)
             S_new['C'] = tracked_candidate_keypoints[status.flatten() == 1]
-            S_new['C'] = S_new['C'].T
             print("T shape", S_prev['T'].shape)
             print("F shape", S_prev['F'].shape)
-            S_new['F'] = S_prev['F'][:, status.flatten() == 1]
-            S_new['T'] = S_prev['T'][:, status.flatten() == 1]
+            S_new['F'] = S_prev['F'][status.flatten() == 1, :]
+            S_new['T'] = S_prev['T'][status.flatten() == 1, :]
 
             # Find new candidate keypoints
         if self.descriptor_name == 'harris':
@@ -354,40 +350,31 @@ class VisualOdometryPipeline:
         elif self.descriptor_name == 'sift':
             candidate_keypoints, _ = self._detect_sift(curr_gray)
         
+        # Unpack the keypoints into a numpy array
+        candidate_keypoints = np.array([kp.pt for kp in candidate_keypoints]) # shape (N, 2)
+            
         # Add the new candidate keypoints to the candidate keypoints
-        print("Candidate keypoints shape:", candidate_keypoints.shape)
-        candidate_keypoints = self._remove_duplicates(candidate_keypoints, S_new['P'])
-        candidate_keypoints = self._remove_duplicates(candidate_keypoints, S_new['C'])
+        print("Candidate keypoints shape before removing duplicates:", candidate_keypoints.shape)
+        candidate_keypoints = self._remove_duplicates(candidate_keypoints.T, S_new['P'].T).T
+        candidate_keypoints = self._remove_duplicates(candidate_keypoints.T, S_new['C'].T).T
         print("Candidate keypoints shape after removing duplicates:", candidate_keypoints.shape)
-        S_new['C'] = np.c_[S_new['C'], candidate_keypoints]
+        # Add the candidate keypoints to the candidate keypoints
+        S_new['C'] = np.r_[S_new['C'], candidate_keypoints]
         # Add the new candidate keypoints to the first observation
-        S_new['F'] = np.c_[S_new['F'], candidate_keypoints]
+        S_new['F'] = np.r_[S_new['F'], candidate_keypoints]
 
-        # can_size = candidate_keypoints.shape[1]
-        # if can_size> 0:
-        #     T_new_repeated = np.empty((1, can_size), dtype=object)
-        #     for j in range(can_size):
-        #         # .copy() just to be safe that each column is a separate dict
-        #         T_new_repeated[0, j] = T_new.copy()
-        #     S_new['T'] = np.concatenate([S_new['T'], T_new_repeated], axis=1)
-
-        prev_keypoints = S_prev['P'][:2, :].T.reshape(-1, 1, 2).astype(np.float32)
+        prev_keypoints = S_prev['P']
         
         print(f"Tracking {len(prev_keypoints)} keypoints...")  # Debugging
         
         # Track keypoints
         valid_prev_keypoints, valid_curr_keypoints, valid_landmarks = track_keypoints(
-            self.img2, curr_gray, prev_keypoints, S_prev['X']
+            self.img2, curr_gray, np.float32(prev_keypoints), S_prev['X']
         )
-        valid_prev_keypoints = valid_prev_keypoints.reshape(-1, 2)
-        valid_curr_keypoints = valid_curr_keypoints.reshape(-1, 2)
 
         # Use PnP with ransac
-        landmarks = valid_landmarks
-        landmarks = landmarks[:, :3]  # Take only the first 3 columns (x, y, z)
-        print("Landmarks shape:", landmarks.shape)
         success, rvec, tvec, inliers = cv2.solvePnPRansac(
-            landmarks,  # 3D
+            valid_landmarks,  # 3D
             valid_curr_keypoints,  # 2D
             self.K,
             None,
@@ -400,20 +387,15 @@ class VisualOdometryPipeline:
         if self.config["PLOTS"]["save"]:
             save_path = self.config["PLOTS"]["save_path"]
             with open(os.path.join(save_path, f"inliers_{self.descriptor_name}.txt"), 'a') as f:
-                f.write(f"{landmarks.shape[0]} {inliers.shape[0]}\n")
+                f.write(f"{valid_landmarks.shape[0]} {inliers.shape[0]}\n")
         if success:
             R_mat, _ = cv2.Rodrigues(rvec)
             t_flat = tvec.flatten()
             T_new['R'] = R_mat
             T_new['t'] = t_flat
-            print("Pose:")
-            print(R_mat)
-            print(t_flat)
 
-
-            T_new_repeated = np.tile(T_new, (len(candidate_keypoints[1]), 1))
-            print("T_new_repeated shape:", T_new_repeated.shape)
-            S_new['T'] = np.c_[S_new['T'], T_new_repeated.T]
+            T_new_repeated = np.tile(T_new, (len(candidate_keypoints[0]), 1))
+            S_new['T'] = np.r_[S_new['T'], T_new_repeated]
 
             ### Logic for adding new landmarks
             new_3d_points = []
@@ -422,16 +404,17 @@ class VisualOdometryPipeline:
             if S_new['T'].size > 0:
                 indices_to_remove = []
                 for i in range(S_new['C'].shape[1]):
-                    c = S_new['C'][:, i].reshape(2, 1)  # shape (2,1)
-                    f = S_new['F'][:, i].reshape(2, 1)  # shape (2,1)
-
-                    t = S_new['T'][:, i]
+                    c = S_new['C'][i, :] # shape (2,)
+                    f = S_new['F'][i, :] # shape (2,)
+                    t = S_new['T'][i, :] 
+                    print("t shape:", t.shape)
+                    print("t: ", t)
                     angle_c = self._compute_angle(f, c, t[0].copy(), T_new.copy(), self.K)
                     if angle_c > self.baseline_angle_thresh:
                         M1 = self.K @ np.c_[t[0]['R'], t[0]['t']]
                         M2 = self.K @ np.c_[T_new['R'], T_new['t']]
-                        homogeneous_f = np.vstack((f, [1]))
-                        homogeneous_c = np.vstack((c, [1]))
+                        homogeneous_f = np.hstack((f, [1]))
+                        homogeneous_c = np.hstack((c, [1]))
                         new_3d_point = linearTriangulation(homogeneous_f, homogeneous_c, M1, M2) # TODO: Should be the correct order right?
                         new_3d_points.append(new_3d_point)
                         new_3d_points_2d.append(c)
@@ -520,8 +503,8 @@ class VisualOdometryPipeline:
 
         returns: float, angle [radians] between the two bearing vectors in world frame
         """
-        f_h = np.vstack((f, [1]))  # shape (3,1)
-        c_h = np.vstack((c, [1]))  # shape (3,1)
+        f_h = np.hstack((f, [1]))  # shape (3,1)
+        c_h = np.hstack((c, [1]))  # shape (3,1)
 
         # 2 Back-project to normalized camera rays
         f_cam = np.linalg.inv(K) @ f_h
