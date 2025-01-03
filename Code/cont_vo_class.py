@@ -54,6 +54,20 @@ class VisualOdometryPipeline:
 
 
     def initialize(self):
+        #delete previous folders
+        if self.config["PLOTS"]["save"]:
+            save_path = self.config["PLOTS"]["save_path"]
+            if os.path.exists(save_path):
+                for file in os.listdir(save_path):
+                    file_path = os.path.join(save_path, file)
+                    try:
+                        if os.path.isfile(file_path) and (file.startswith('pose') or file.startswith('inliers')) and self.descriptor_name in file:
+                            os.unlink(file_path)
+                    except Exception as e:
+                        print(e)
+            else:
+                os.makedirs(save_path)
+
         key1, desc1, key2, desc2 = self._detect_and_compute_init()
         print("key1 shape, key2 shape, desc1 shape, desc2 shape", key1.shape, key2.shape, desc1.shape, desc2.shape)
         matched_keys1, matched_keys2 = self._match_descriptors(key1, desc1, key2, desc2)
@@ -392,6 +406,7 @@ class VisualOdometryPipeline:
         # Use PnP with ransac
         landmarks = valid_landmarks
         landmarks = landmarks[:, :3]  # Take only the first 3 columns (x, y, z)
+        print("Landmarks shape:", landmarks.shape)
         success, rvec, tvec, inliers = cv2.solvePnPRansac(
             landmarks,  # 3D
             valid_curr_keypoints,  # 2D
@@ -402,7 +417,11 @@ class VisualOdometryPipeline:
             confidence=self.config['PNPRANSAC']['prob'],
             flags=cv2.SOLVEPNP_EPNP
         )
-
+        print("Inliers shape:", inliers.shape)
+        if self.config["PLOTS"]["save"]:
+            save_path = self.config["PLOTS"]["save_path"]
+            with open(os.path.join(save_path, f"inliers_{self.descriptor_name}.txt"), 'a') as f:
+                f.write(f"{landmarks.shape[0]} {inliers.shape[0]}\n")
         if success:
             R_mat, _ = cv2.Rodrigues(rvec)
             t_flat = tvec.flatten()
