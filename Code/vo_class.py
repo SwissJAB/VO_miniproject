@@ -152,6 +152,9 @@ class VisualOdometryPipeline:
 
     def _detect_harris(self):
         print("Harris")
+
+        if self.config["PLOTS"]["save"]:
+            start_time = time.time()
         # For speed, read parameters only once into local variables
         harris_cfg = self.config['HARRIS']
         self.descriptors1, self.keypoints1 = get_descriptors_harris(
@@ -162,7 +165,6 @@ class VisualOdometryPipeline:
             harris_cfg['nonmaximum_supression_radius'], 
             harris_cfg['descriptor_radius']
         )
-
         self.descriptors2, self.keypoints2 = get_descriptors_harris(
             self.img2,
             harris_cfg['corner_patch_size'], 
@@ -171,8 +173,15 @@ class VisualOdometryPipeline:
             harris_cfg['nonmaximum_supression_radius'],
             harris_cfg['descriptor_radius']
         )
+        if self.config["PLOTS"]["save"]:
+            end_time = time.time()
+            save_path = self.config["PLOTS"]["save_path"]
+            with open(os.path.join(save_path, f"time_{self.descriptor_name}.txt"), 'a') as f:
+                f.write(f"{end_time - start_time}\n")
 
     def _detect_shi_tomasi(self):
+        if self.config["PLOTS"]["save"]:
+            start_time = time.time()
         st_cfg = self.config['SHI_TOMASI']
         self.descriptors1, self.keypoints1 = get_descriptors_st(
             self.img1,
@@ -188,12 +197,21 @@ class VisualOdometryPipeline:
             st_cfg['nonmaximum_supression_radius'], 
             st_cfg['descriptor_radius']
         )
+        if self.config["PLOTS"]["save"]:
+            end_time = time.time()
+            save_path = self.config["PLOTS"]["save_path"]
+            with open(os.path.join(save_path, f"time_{self.descriptor_name}.txt"), 'a') as f:
+                f.write(f"{end_time - start_time}\n")
+
+                
         print("shi keypoints1 shape:", self.keypoints1.shape)
         print("shi keypoints2 shape:", self.keypoints2.shape)
         print("shi descriptors1 shape:", self.descriptors1.shape)
         print("shi descriptors2 shape:", self.descriptors2.shape)
 
     def _detect_sift(self):
+        if self.config["PLOTS"]["save"]:
+            start_time = time.time()
         sift_cfg = self.config['SIFT']
         sift = cv2.SIFT_create(
             nfeatures=sift_cfg['nfeatures'],
@@ -214,6 +232,11 @@ class VisualOdometryPipeline:
         self.keypoints2 = np.array([keypoints2_np[1], keypoints2_np[0]])
         self.descriptors1 = descriptors1_t
         self.descriptors2 = descriptors2_t
+        if self.config["PLOTS"]["save"]:
+            end_time = time.time()
+            save_path = self.config["PLOTS"]["save_path"]
+            with open(os.path.join(save_path, f"time_{self.descriptor_name}.txt"), 'a') as f:
+                f.write(f"{end_time - start_time}\n")
 
         print("SIFT keypoints1 shape:", self.keypoints1.shape)
         print("SIFT keypoints2 shape:", self.keypoints2.shape)
