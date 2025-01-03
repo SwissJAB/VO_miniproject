@@ -6,14 +6,14 @@ import yaml
 import os
 
 from descriptor_utils import get_descriptors_harris, get_descriptors_st, get_descriptors_harris_cv2, get_descriptors_st_cv2
-from get_descriptors.match_descriptors import matchDescriptors
-from get_descriptors.plot_matches import plotMatches
+# from get_descriptors.match_descriptors import matchDescriptors
+# from get_descriptors.plot_matches import plotMatches
 
-from two_view_geometry.estimate_essential_matrix import estimateEssentialMatrix
+# from two_view_geometry.estimate_essential_matrix import estimateEssentialMatrix
 from two_view_geometry.decompose_essential_matrix import decomposeEssentialMatrix
 from two_view_geometry.disambiguate_relative_pose import disambiguateRelativePose
 from two_view_geometry.linear_triangulation import linearTriangulation
-from two_view_geometry.draw_camera import drawCamera
+# from two_view_geometry.draw_camera import drawCamera
 
 from feature_tracking.klt_tracking import track_keypoints
 from visualizer import VisualOdometryVisualizer
@@ -69,25 +69,66 @@ class VisualOdometryPipeline:
                 os.makedirs(save_path)
 
         key1, desc1, key2, desc2 = self._detect_and_compute_init()
-        print("key1 shape, key2 shape, desc1 shape, desc2 shape", key1.shape, key2.shape, desc1.shape, desc2.shape)
-        matched_keys1, matched_keys2 = self._match_descriptors(key1, desc1, key2, desc2)
-        print("matched_keys1 shape, matched_keys2 shape", matched_keys1.shape, matched_keys2.shape)
-        E_mat, inlier_matched_keys1, inlier_matched_keys2 = self._find_essential_matrix(matched_keys1, matched_keys2)
-        print("E_mat shape, inlier_matched_keys1 shape, inlier_matched_keys2 shape", E_mat.shape, inlier_matched_keys1.shape, inlier_matched_keys2.shape)
-        Rot_mat, translat = self._decompose_E(E_mat, inlier_matched_keys1, inlier_matched_keys2)
-        print("Rot_mat shape, translat shape", Rot_mat.shape, translat.shape)
-        landmarks = self._triangulate(Rot_mat, translat, inlier_matched_keys1, inlier_matched_keys2)
-        print("landmarks shape", landmarks.shape)
+        matched_pts1, matched_pts2 = self._match_descriptors_sift_cv2(key1, desc1, key2, desc2) # Matches is list of list
+        
+        if self.config["PLOTS"]["show"]:
+            img1_copy = self.img1.copy()
+            img2_copy = self.img2.copy()
+            img1_color = cv2.cvtColor(img1_copy, cv2.COLOR_GRAY2BGR)
+            img1_og = img1_color.copy()
+            img2_color = cv2.cvtColor(img2_copy, cv2.COLOR_GRAY2BGR)
+            img2_og = img2_color.copy()
+            # Draw keypoints as circles
+            for pt in matched_pts1:
+                x, y = int(pt[0]), int(pt[1])
+                cv2.circle(img1_color, (x, y), 3, (0, 0, 255), -1)
+
+            for pt in matched_pts2:
+                x, y = int(pt[0]), int(pt[1])
+                cv2.circle(img2_color, (x, y), 3, (0, 0, 255), -1)
+
+            img1_og = cv2.drawKeypoints(img1_og, key1, None, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+            img2_og = cv2.drawKeypoints(img2_og, key2, None, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+
+        
+            cv2.imshow("Keypoints1 after matching", img1_color)
+            cv2.imshow("Keypoints2 after matching", img2_color)
+            cv2.imshow("Keypoints1 before matching", img1_og)
+            cv2.imshow("Keypoints2 before matching", img2_og)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+            
+        matched_pts1_np = np.array(matched_pts1) # shape (N, 2)
+        matched_pts2_np = np.array(matched_pts2) # shape (N, 2)
+
+        # Find essential matrix and filter out outliers
+        E_mat, mask = self._find_essential_matrix(matched_pts1_np, matched_pts2_np)
+        mask = mask.ravel() == 1 if mask is not None else None
+        
+        matched_pts1_np_filtered = matched_pts1_np[mask, :] # M x 2
+        matched_pts2_np_filtered = matched_pts2_np[mask, :] # M x 2  ## M filtered points
+        matched_pts1_np_f_homo = np.c_[matched_pts1_np_filtered, np.ones((matched_pts1_np_filtered.shape[0], 1))].T # 3 x M
+        matched_pts2_np_f_homo = np.c_[matched_pts2_np_filtered, np.ones((matched_pts2_np_filtered.shape[0], 1))].T # 3 x M
+
+        # Decompose E to get R, t
+        Rot_mat, translat = self._decompose_E(E_mat, matched_pts1_np_f_homo, matched_pts2_np_f_homo)
+
+        # Triangulate landmarks
+        proj_mat1 = self.K @ np.eye(3, 4)
+        proj_mat2 = self.K @ np.c_[Rot_mat, translat]
+        landmarks = cv2.triangulatePoints(proj_mat1, proj_mat2, matched_pts1_np_filtered.T, matched_pts2_np_filtered.T)
+        landmarks = landmarks[:3, :]
+
+        ### END SIFT stuff second try ###
 
         S_1 = {
-            # Structure in the second frame probably TODO: Clarify this
-            'P': inlier_matched_keys2,       # shape (2, N)
-            'X': landmarks,        # shape (3, N) or (4, N) in homogeneous
+            'P': matched_pts2_np_filtered.T,        # shape (2, M)
+            'X': landmarks,                         # shape (3, M)
     
-            # C_1 = candidate keypoints to be triangulated
-            'C': np.empty((2, 0)),      # empty at the beginning
-            'F': np.empty((2, 0)),      # first obs of each candidate
-            'T': np.empty((1,0))                     # store the pose at first obs
+
+            'C': np.empty((2, 0)),                  # empty at the beginning
+            'F': np.empty((2, 0)),                  # first obs of each candidate
+            'T': np.empty((1,0))                    # store the pose at first obs
         }
         T_WC_1 = {
             'R': Rot_mat,
@@ -101,19 +142,14 @@ class VisualOdometryPipeline:
         Example of a continuous loop over multiple frames. 
         frames = [I1, I2, I3, ...]
         """
-        # 1) Initialize with first two frames
-        S_1, T_WC_1 = self.initialize(
-            # frames[0], frames[1],
-        )
+        # 1 Initialize with first two frames
+        S_1, T_WC_1 = self.initialize()
         self.global_poses.append(T_WC_1)
 
-        # 2) For each subsequent frame
+        # 2 For each subsequent frame
         S_prev = S_1
         T_prev = T_WC_1
-        print("----------------------------------------INIT----------------------------------------")
-        print("S: ", S_prev)
-        print("T: ", T_prev)
-        print('----------------------------------------INIT END----------------------------------------')
+        
         print("Starting continuous operation...")
         prev_frame = self.img2
         for frame in self._get_next_frames():
@@ -148,53 +184,16 @@ class VisualOdometryPipeline:
         """
         Detect keypoints and compute descriptors based on self.descriptor_name.
         """
-        print(f"Descriptor: {self.descriptor_name}")
-        
-        if self.descriptor_name == 'harris':
-            key1, desc1 = self._detect_harris(self.img1) 
-            key2, desc2 = self._detect_harris(self.img2)
-        elif self.descriptor_name == 'shi_tomasi':
+        if self.descriptor_name == 'shi_tomasi':
             key1, desc1 = self._detect_shi_tomasi(self.img1) 
             key2, desc2 = self._detect_shi_tomasi(self.img2)
         elif self.descriptor_name == 'sift':
-            key1, desc1 = self._detect_sift(self.img1)
-            key2, desc2 = self._detect_sift(self.img2)
+            key1, desc1 = self._detect_sift(self.img1, debug=False)
+            key2, desc2 = self._detect_sift(self.img2, debug=False)
         else:
-            raise ValueError("Invalid descriptor type")
+            raise ValueError("Not Shi-Tomasi")
         
         return key1, desc1, key2, desc2
-
-    def _detect_harris(self, img):
-        if self.config["PLOTS"]["save"]:
-            start_time = time.time()
-        print("Harris")
-        # For speed, read parameters only once into local variables
-        harris_cfg = self.config['HARRIS']
-        if harris_cfg['cv2']:
-            descriptors, keypoints = get_descriptors_harris_cv2(
-                img,
-                harris_cfg['corner_patch_size'], 
-                harris_cfg['kappa'], 
-                harris_cfg['num_keypoints'], 
-                harris_cfg['nonmaximum_supression_radius'], 
-                harris_cfg['descriptor_radius']
-            )
-        else:
-            descriptors, keypoints = get_descriptors_harris(
-                img,
-                harris_cfg['corner_patch_size'], 
-                harris_cfg['kappa'], 
-                harris_cfg['num_keypoints'], 
-                harris_cfg['nonmaximum_supression_radius'], 
-                harris_cfg['descriptor_radius']
-            )
-
-        if self.config["PLOTS"]["save"]:
-            end_time = time.time()
-            save_path = self.config["PLOTS"]["save_path"]
-            with open(os.path.join(save_path, f"time_{self.descriptor_name}.txt"), 'a') as f:
-                f.write(f"{end_time - start_time}\n")
-        return keypoints, descriptors
 
     def _detect_shi_tomasi(self, img):
         if self.config["PLOTS"]["save"]:
@@ -207,7 +206,9 @@ class VisualOdometryPipeline:
                 st_cfg['corner_patch_size'], 
                 st_cfg['num_keypoints'],
                 st_cfg['nonmaximum_supression_radius'], 
-                st_cfg['descriptor_radius']
+                st_cfg['descriptor_radius'],
+                st_cfg['quality_level'],
+                debug=True
             )
         else:
             descriptors, keypoints = get_descriptors_st(
@@ -225,7 +226,8 @@ class VisualOdometryPipeline:
     
         return keypoints, descriptors
 
-    def _detect_sift(self, img):
+
+    def _detect_sift(self, img, debug=True):
         if self.config["PLOTS"]["save"]:
             start_time = time.time()
         sift_cfg = self.config['SIFT']
@@ -235,11 +237,16 @@ class VisualOdometryPipeline:
             sigma=sift_cfg['sigma'],
             nOctaveLayers=sift_cfg['n_otave_layers']
         )
-        kp1, desc1 = sift.detectAndCompute(img, None)
+        kp, desc = sift.detectAndCompute(img, mask=None)
+        
+        # keypoints = np.array([kp.pt for kp in kp]).T  # shape (2, N)
+        # descriptors = desc.T                       # shape (128, N)
 
-        # Convert to np arrays
-        keypoints = np.array([kp.pt for kp in kp1]).T  # shape (2, N1)
-        descriptors = desc1.T                       # shape (128, N1)
+        if self.config["PLOTS"]["show"]:
+            keypoint_img = cv2.drawKeypoints(img, kp, None, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+            cv2.imshow("Keypoints before cutting", keypoint_img)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
 
         if self.config["PLOTS"]["save"]:
             end_time = time.time()
@@ -247,68 +254,55 @@ class VisualOdometryPipeline:
             with open(os.path.join(save_path, f"time_{self.descriptor_name}.txt"), 'a') as f:
                 f.write(f"{end_time - start_time}\n")
 
-        return keypoints, descriptors
+        return kp, desc
          
-    def _match_descriptors(self, keys1, desc1, keys2, desc2):
+    def _match_descriptors_sift_cv2(self, keys1, desc1, keys2, desc2):
         """
-        Use matchDescriptors() from local library.
-        Then extract matched keypoints in homogeneous coordinates.
+        Use OpenCV's BFMatcher to match descriptors.
         """
-        if self.descriptor_name in ['harris', 'shi_tomasi']:
-            match_lambda = self.config[self.descriptor_name.upper()]['match_lambda'] #TODO: not clean add one case for ST or harris independently
-        else:
-            match_lambda = self.config['SIFT']['match_lambda']
+        bf = cv2.BFMatcher()
+        matches = bf.knnMatch(queryDescriptors=desc1, trainDescriptors=desc2, k=self.config['MATCHING']['k'])
+        pts1 = []
+        pts2 = []
+        good = []
+        for i, (m, n) in enumerate(matches):
+            if m.distance < self.config['MATCHING']['ratio'] * n.distance:
+                good.append([m])
+                pts2.append(keys2[m.trainIdx].pt)
+                pts1.append(keys1[m.queryIdx].pt)
 
-        # matches is a 1D array with length = # of query descriptors
-        matches = matchDescriptors(
-            desc2,  # Query
-            desc1,  # Database TODO: This is swapped?
-            match_lambda # Should be global?
-        )
-        print(f"Number of matches: {np.sum(matches != -1)}")
+        if self.config["PLOTS"]["show"]:
+            matched_img = cv2.drawMatchesKnn(self.img1, keys1, self.img2, keys2, good, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+            cv2.imshow("Matches", matched_img)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
 
-        query_indices = np.nonzero(matches >= 0)[0]
-        match_indices = matches[query_indices]
+        print("pts1 shape:", len(pts1))
+        print("pts1: ", pts1)
 
-        matched_keypoints1 = keys1[:, match_indices]
-        matched_keypoints2 = keys2[:, query_indices]
-
-        # Convert to homogeneous coords
-        matched_keypoints1 = np.r_[matched_keypoints1, np.ones((1, matched_keypoints1.shape[1]))]
-        matched_keypoints2 = np.r_[matched_keypoints2, np.ones((1, matched_keypoints2.shape[1]))]
-
-        matched_keypoints1 = np.array([matched_keypoints1[0], matched_keypoints1[1], matched_keypoints1[2]])
-        matched_keypoints2 = np.array([matched_keypoints2[0], matched_keypoints2[1], matched_keypoints2[2]])
-        print("matched_keypoints2:\n", matched_keypoints2)
-        return matched_keypoints1, matched_keypoints2
+        return pts1, pts2 # good[i][0].queryIdx, good[i][0].trainIdx for accessing match at index i
 
     def _find_essential_matrix(self, matched_keys1, matched_keys2):
         """
         Find the essential matrix using OpenCV's RANSAC-based findEssentialMat.
         """
-
-        print("matched_keypoints1:", matched_keys1.shape)
-        print("matched_keypoints2:", matched_keys2.shape)
-
         E_mat, mask = cv2.findEssentialMat(
-            matched_keys1[:2].T,  # shape => Nx2
-            matched_keys2[:2].T,
+            matched_keys1,  # shape => Nx2
+            matched_keys2,
             self.K, 
             method=cv2.RANSAC, 
             prob=self.config['RANSAC']['prob'], 
             threshold=self.config['RANSAC']['threshold']
         )
-        mask = mask.ravel() == 1 if mask is not None else None
-        print("Mask shape:", mask.shape if mask is not None else "No mask")
 
         # Filter matched keypoints by inlier mask
-        if mask is not None:
-            matched_keys1 = matched_keys1[:, mask]
-            matched_keys2 = matched_keys2[:, mask]
-        else:
-            print("No mask available.")
+        # if mask is not None:
+        #     matched_keys1 = matched_keys1[mask, :]
+        #     matched_keys2 = matched_keys2[mask, :]
+        # else:
+        #     print("No mask available.")
 
-        return E_mat, matched_keys1, matched_keys2 
+        return E_mat, mask
 
     def _decompose_E(self, E_mat, inlier_matched_keys1, inlier_matched_keys2):
         """
@@ -326,22 +320,7 @@ class VisualOdometryPipeline:
         print("Translation vector: ", translat)
         return Rot_mat, translat
         
-    def _triangulate(self, Rot_mat, translat, inlier_matched_keys1, inlier_matched_keys2):
-        """
-        Triangulate matched points into 3D using linearTriangulation.
-        """
-        M1 = self.K @ np.eye(3, 4)
-        M2 = self.K @ np.c_[Rot_mat, translat]
-        landmarks = linearTriangulation(
-            inlier_matched_keys1,
-            inlier_matched_keys2, 
-            M1, 
-            M2
-        )
-        return landmarks
-
     # Main part of the continuous operation
-    # TODO: This is missing the logic for adding new landmarks.
     def _process_frame(self, frame, prev_frame, S_prev, T_prev):
         """
         Process each new frame for continuous operation.
@@ -350,7 +329,7 @@ class VisualOdometryPipeline:
         T_new = T_prev.copy()
         curr_gray = frame  
     
-    # Parameters for Lucas-Kanade optical flow
+        # Parameters for Lucas-Kanade optical flow
         lk_params = dict(winSize=(21, 21),
                         maxLevel=3,
                         criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01))
@@ -532,9 +511,6 @@ class VisualOdometryPipeline:
         else:
             return np.column_stack(unique_kps)
 
-
-
-
     def _compute_angle(self, f, c, T_i, T_j, K):
         """
         f, c:   (2,1) pixel coordinates of the same 3D point in first/new frames
@@ -547,7 +523,7 @@ class VisualOdometryPipeline:
         f_h = np.vstack((f, [1]))  # shape (3,1)
         c_h = np.vstack((c, [1]))  # shape (3,1)
 
-        # 2) Back-project to normalized camera rays
+        # 2 Back-project to normalized camera rays
         f_cam = np.linalg.inv(K) @ f_h
         c_cam = np.linalg.inv(K) @ c_h
 
@@ -563,8 +539,6 @@ class VisualOdometryPipeline:
         angle = np.arccos(cosine)
         #print("Angle:", angle, "Sucess:", angle > self.baseline_angle_thresh)
         return angle
-
-
 
     def _get_next_frames(self):
         """
@@ -589,6 +563,7 @@ class VisualOdometryPipeline:
                 print(f"Failed to load {img_path}. Skipping...")
                 continue
             yield frame
+
 
 if __name__ == "__main__":
     pipeline = VisualOdometryPipeline(config_path='Code/config.yaml')
