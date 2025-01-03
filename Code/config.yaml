@@ -7,7 +7,7 @@ DATA:
 
 FEATURES:
   detectors: ['shi_tomasi', 'harris', 'sift']
-  curr_detector: 0
+  curr_detector: 2
 
 HARRIS:
   cv2: True
@@ -25,16 +25,18 @@ SHI_TOMASI:
   nonmaximum_supression_radius: 8
   descriptor_radius: 9
   match_lambda: 4
+  quality_level: 0.01
 
 SIFT:
-  nfeatures: 200 # Not super sure about this yet
-  #rotation_invariant: True
-  contrast_threshold: 0.04 
-  sigma: 1.0 # 1 or 1.6?
-  #rescale_factor: 0.3
-  n_otave_layers: 5
-  num_octaves: 5 #unused currently
+  nfeatures: 0 
+  contrast_threshold: 0.04
+  sigma: 1.6
+  n_otave_layers: 3
   match_lambda: 4
+
+MATCHING:
+  k: 2
+  ratio: 0.75
 
 RANSAC:
   prob: 0.999
