@@ -3,7 +3,7 @@ DATA:
   datasets: ['parking','kitti','malaga']
   curr_dataset: 'parking'
   init_img_1: '/images/img_00000.png'
-  init_img_2: '/images/img_00008.png'
+  init_img_2: '/images/img_00005.png'
 
 FEATURES:
   detectors: ['shi_tomasi', 'harris', 'sift']
@@ -44,6 +44,6 @@ PNPRANSAC:
   prob: 0.999
 
 CONT_VO:
-  baseline_angle_thresh: 5 # Degree threshold for baseline angle
+  baseline_angle_thresh: 25 # Degree threshold for baseline angle
   kp_dist_thresh: 8.0 # min distance between keypoints 
 

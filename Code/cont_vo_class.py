@@ -312,6 +312,7 @@ class VisualOdometryPipeline:
         
         # Add the new candidate keypoints to the candidate keypoints
         print("Candidate keypoints shape:", candidate_keypoints.shape)
+        candidate_keypoints = self._remove_duplicates(candidate_keypoints, S_new['P'])
         candidate_keypoints = self._remove_duplicates(candidate_keypoints, S_new['C'])
         print("Candidate keypoints shape after removing duplicates:", candidate_keypoints.shape)
         S_new['C'] = np.c_[S_new['C'], candidate_keypoints]
@@ -376,10 +377,8 @@ class VisualOdometryPipeline:
                     f = S_new['F'][:, i].reshape(2, 1)  # shape (2,1)
 
                     t = S_new['T'][:, i]
-
-                    angle_c = self._compute_angle(f, c, t[0], T_new.copy(), self.K)
-
-                    if angle_c > np.deg2rad(self.baseline_angle_thresh):
+                    angle_c = self._compute_angle(f, c, t[0].copy(), T_new.copy(), self.K)
+                    if angle_c > self.baseline_angle_thresh:
                         M1 = self.K @ np.c_[t[0]['R'], t[0]['t']]
                         M2 = self.K @ np.c_[T_new['R'], T_new['t']]
                         homogeneous_f = np.vstack((f, [1]))
@@ -430,7 +429,7 @@ class VisualOdometryPipeline:
             S_new['X'] = valid_landmarks.T
 
             if len(new_3d_points) > 0:
-                print(f"If 2: Adding {len(new_3d_points)} new landmarks.")
+                print(f"If 2: Adding {new_3d_points.shape[1]} new landmarks.")
                 print("New 3D points shape:", new_3d_points.shape)
                 print("New 3D points 2D shape:", new_3d_points_2d_h.shape)
                 S_new['P'] = np.c_[S_new['P'], new_3d_points_2d_h]
