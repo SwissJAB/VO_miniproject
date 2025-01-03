@@ -410,6 +410,14 @@ class VisualOdometryPipeline:
             print("Pose:")
             print(R)
             print(t)
+            if self.config["PLOTS"]["save"]:
+                # save pose in txt file of current descriptor and dataset
+                pose_path = os.path.join(self.config["PLOTS"]["save_path"], f"pose_{self.descriptor_name}_{self.dataset_curr}.txt")
+                with open(pose_path, 'a') as f:
+                    f.write(" ".join(map(str, R[0, :])) + " " + str(t[0])+ " ")
+                    f.write(" ".join(map(str, R[1, :])) + " " + str(t[1])+ " ")
+                    f.write(" ".join(map(str, R[2, :])) + " " + str(t[2]) + "\n")
+
             # Filter valid keypoints using the inliers from solvePnPRansac
             valid_curr_keypoints = valid_curr_keypoints[inliers.ravel()]
             valid_prev_keypoints = valid_prev_keypoints[inliers.ravel()]
