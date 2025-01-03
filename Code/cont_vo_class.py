@@ -118,6 +118,13 @@ class VisualOdometryPipeline:
             print("----------------------------------------CONT----------------------------------------")
             # print("S: ", S_prev)
             print("T: ", T_prev)
+            if self.config["PLOTS"]["save"]:
+                # save pose in txt file of current descriptor and dataset
+                pose_path = os.path.join(self.config["PLOTS"]["save_path"], f"pose_{self.descriptor_name}_{self.dataset_curr}.txt")
+                with open(pose_path, 'a') as f:
+                    f.write(" ".join(map(str, T_prev['R'][0,:])) + " " + str(T_prev['t'][0])+ " ")
+                    f.write(" ".join(map(str, T_prev['R'][1,:])) + " " + str(T_prev['t'][1])+ " ")
+                    f.write(" ".join(map(str, T_prev['R'][2,:])) + " " + str(T_prev['t'][2]) + "\n")
             print('----------------------------------------CONT----------------------------------------')
         
         self.visualizer.close()
@@ -144,6 +151,8 @@ class VisualOdometryPipeline:
         return key1, desc1, key2, desc2
 
     def _detect_harris(self, img):
+        if self.config["PLOTS"]["save"]:
+            start_time = time.time()
         print("Harris")
         # For speed, read parameters only once into local variables
         harris_cfg = self.config['HARRIS']
@@ -155,9 +164,16 @@ class VisualOdometryPipeline:
             harris_cfg['nonmaximum_supression_radius'], 
             harris_cfg['descriptor_radius']
         )
+        if self.config["PLOTS"]["save"]:
+            end_time = time.time()
+            save_path = self.config["PLOTS"]["save_path"]
+            with open(os.path.join(save_path, f"time_{self.descriptor_name}.txt"), 'a') as f:
+                f.write(f"{end_time - start_time}\n")
         return keypoints, descriptors
 
     def _detect_shi_tomasi(self, img):
+        if self.config["PLOTS"]["save"]:
+            start_time = time.time()
         st_cfg = self.config['SHI_TOMASI']
         descriptors, keypoints = get_descriptors_st(
             img,
@@ -166,9 +182,17 @@ class VisualOdometryPipeline:
             st_cfg['nonmaximum_supression_radius'], 
             st_cfg['descriptor_radius']
         )
+        if self.config["PLOTS"]["save"]:
+            end_time = time.time()
+            save_path = self.config["PLOTS"]["save_path"]
+            with open(os.path.join(save_path, f"time_{self.descriptor_name}.txt"), 'a') as f:
+                f.write(f"{end_time - start_time}\n")
+    
         return keypoints, descriptors
 
     def _detect_sift(self, img):
+        if self.config["PLOTS"]["save"]:
+            start_time = time.time()
         sift_cfg = self.config['SIFT']
         sift = cv2.SIFT_create(
             nfeatures=sift_cfg['nfeatures'],
@@ -181,6 +205,12 @@ class VisualOdometryPipeline:
         # Convert to np arrays
         keypoints = np.array([kp.pt for kp in kp1]).T  # shape (2, N1)
         descriptors = desc1.T                       # shape (128, N1)
+
+        if self.config["PLOTS"]["save"]:
+            end_time = time.time()
+            save_path = self.config["PLOTS"]["save_path"]
+            with open(os.path.join(save_path, f"time_{self.descriptor_name}.txt"), 'a') as f:
+                f.write(f"{end_time - start_time}\n")
 
         return keypoints, descriptors
          
