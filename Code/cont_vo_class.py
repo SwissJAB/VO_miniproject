@@ -312,9 +312,19 @@ class VisualOdometryPipeline:
         
         # Add the new candidate keypoints to the candidate keypoints
         print("Candidate keypoints shape:", candidate_keypoints.shape)
+        candidate_keypoints = self._remove_duplicates(candidate_keypoints, S_new['C'])
+        print("Candidate keypoints shape after removing duplicates:", candidate_keypoints.shape)
         S_new['C'] = np.c_[S_new['C'], candidate_keypoints]
         # Add the new candidate keypoints to the first observation
         S_new['F'] = np.c_[S_new['F'], candidate_keypoints]
+
+        # can_size = candidate_keypoints.shape[1]
+        # if can_size> 0:
+        #     T_new_repeated = np.empty((1, can_size), dtype=object)
+        #     for j in range(can_size):
+        #         # .copy() just to be safe that each column is a separate dict
+        #         T_new_repeated[0, j] = T_new.copy()
+        #     S_new['T'] = np.concatenate([S_new['T'], T_new_repeated], axis=1)
 
         prev_keypoints = S_prev['P'][:2, :].T.reshape(-1, 1, 2).astype(np.float32)
         
@@ -346,11 +356,66 @@ class VisualOdometryPipeline:
             t_flat = tvec.flatten()
             T_new['R'] = R_mat
             T_new['t'] = t_flat
-            # TODO: Output of this is not good. At the start i think it is acceptable, then it gets horrible at some point.
-            # Might be because there are almost no landmarks left anymore at some point
             print("Pose:")
             print(R_mat)
             print(t_flat)
+
+
+            T_new_repeated = np.tile(T_new, (len(candidate_keypoints[1]), 1))
+            print("T_new_repeated shape:", T_new_repeated.shape)
+            S_new['T'] = np.c_[S_new['T'], T_new_repeated.T]
+
+            ### Logic for adding new landmarks
+            new_3d_points = []
+            new_3d_points_2d = []
+
+            if S_new['T'].size > 0:
+                indices_to_remove = []
+                for i in range(S_new['C'].shape[1]):
+                    c = S_new['C'][:, i].reshape(2, 1)  # shape (2,1)
+                    f = S_new['F'][:, i].reshape(2, 1)  # shape (2,1)
+
+                    t = S_new['T'][:, i]
+
+                    angle_c = self._compute_angle(f, c, t[0], T_new.copy(), self.K)
+
+                    if angle_c > np.deg2rad(self.baseline_angle_thresh):
+                        M1 = self.K @ np.c_[t[0]['R'], t[0]['t']]
+                        M2 = self.K @ np.c_[T_new['R'], T_new['t']]
+                        homogeneous_f = np.vstack((f, [1]))
+                        homogeneous_c = np.vstack((c, [1]))
+                        new_3d_point = linearTriangulation(homogeneous_f, homogeneous_c, M1, M2) # TODO: Should be the correct order right?
+                        new_3d_points.append(new_3d_point)
+                        new_3d_points_2d.append(c)
+                        indices_to_remove.append(i)
+
+
+            if len(new_3d_points) > 0:
+                print(f"if 1: Adding {len(new_3d_points)} new landmarks.")
+                print("New 3D points shape before stack:", new_3d_points[0].shape)
+                print("New 3D points 2D shape before stack:", new_3d_points_2d[0].shape)
+                new_3d_points = np.column_stack(new_3d_points)
+                new_3d_points_2d = np.column_stack(new_3d_points_2d)
+                new_3d_points_2d_h = np.r_[new_3d_points_2d, np.ones((1, new_3d_points_2d.shape[1]))]
+                print("New 3D points shape:", new_3d_points.shape)
+                print("New 3D points 2D shape:", new_3d_points_2d_h.shape)
+
+                # Append to the existing landmarks
+                #S_new['X'] = np.c_[S_new['X'], new_3d_points]
+
+                # Also keep track of the 2D “feature-plane” location in P if you want
+                #S_new['P'] = np.c_[S_new['P'], np.r_[new_3d_points_2d, np.ones((1, new_3d_points_2d.shape[1]))]]
+
+                # Remove these candidates from 'C' and 'F'
+                mask = np.ones(S_new['C'].shape[1], dtype=bool)
+                mask[indices_to_remove] = False
+                S_new['C'] = S_new['C'][:, mask]
+                S_new['F'] = S_new['F'][:, mask]
+                S_new['T'] = S_new['T'][:, mask]
+
+
+            ### Logic for PnP
+
             # Filter valid keypoints using the inliers from solvePnPRansac
             valid_curr_keypoints = valid_curr_keypoints[inliers.ravel()]
             valid_prev_keypoints = valid_prev_keypoints[inliers.ravel()]
@@ -363,13 +428,74 @@ class VisualOdometryPipeline:
             # Update keypoints
             S_new['P'] = valid_curr_keypoints
             S_new['X'] = valid_landmarks.T
-            T_new_repeated = np.tile(T_new, (len(candidate_keypoints[1]), 1))
-            print("T_new_repeated shape:", T_new_repeated.shape)
 
-            S_new['T'] = np.c_[S_new['T'], T_new_repeated.T]
+            if len(new_3d_points) > 0:
+                print(f"If 2: Adding {len(new_3d_points)} new landmarks.")
+                print("New 3D points shape:", new_3d_points.shape)
+                print("New 3D points 2D shape:", new_3d_points_2d_h.shape)
+                S_new['P'] = np.c_[S_new['P'], new_3d_points_2d_h]
+                S_new['X'] = np.c_[S_new['X'], new_3d_points]
+
             return S_new, T_new
         else:
             print("Pose was not calculated.")
+
+    # TODO: This might be a suboptimal way to remove duplicates
+    def _remove_duplicates(self, new_kps, existing_kps):
+        """
+        new_kps:      shape (2, N_new)
+        existing_kps: shape (2, N_exist)
+        returns:      shape (2, M) subset of new_kps that are not duplicates
+        """
+        if existing_kps.shape[1] == 0:
+            return new_kps  # If no existing kps, all are unique
+
+        unique_kps = []
+        for i in range(new_kps.shape[1]):
+            kp = new_kps[:, i]
+            # Euclidean distance TODO: Maybe suboptimal, not sure rn
+            distances = np.linalg.norm(existing_kps[:2, :] - kp.reshape(2, 1), axis=0)
+            if np.min(distances) > self.config['CONT_VO']['kp_dist_thresh']:
+                unique_kps.append(kp)
+
+        if len(unique_kps) == 0:
+            return np.empty((2, 0))  # No unique kps
+        else:
+            return np.column_stack(unique_kps)
+
+
+
+
+    def _compute_angle(self, f, c, T_i, T_j, K):
+        """
+        f, c:   (2,1) pixel coordinates of the same 3D point in first/new frames
+        T_i:    dict with {'R': R_i, 't': t_i} for the first camera pose
+        T_j:    dict with {'R': R_j, 't': t_j} for the new camera pose
+        K:      (3,3) intrinsic matrix
+
+        returns: float, angle [radians] between the two bearing vectors in world frame
+        """
+        f_h = np.vstack((f, [1]))  # shape (3,1)
+        c_h = np.vstack((c, [1]))  # shape (3,1)
+
+        # 2) Back-project to normalized camera rays
+        f_cam = np.linalg.inv(K) @ f_h
+        c_cam = np.linalg.inv(K) @ c_h
+
+        R_i = T_i['R']  # shape (3,3)
+        R_j = T_j['R']  # shape (3,3)
+        v_i_world = R_i @ f_cam  # shape (3,1)
+        v_j_world = R_j @ c_cam  # shape (3,1)
+
+        dotp = np.dot(v_i_world.ravel(), v_j_world.ravel())
+        denom = np.linalg.norm(v_i_world) * np.linalg.norm(v_j_world)
+        # Numerical guard
+        cosine = np.clip(dotp / (denom + 1e-15), -1.0, 1.0)
+        angle = np.arccos(cosine)
+        #print("Angle:", angle, "Sucess:", angle > self.baseline_angle_thresh)
+        return angle
+
+
 
     def _get_next_frames(self):
         """
