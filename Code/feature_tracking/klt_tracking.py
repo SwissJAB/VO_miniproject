@@ -23,6 +23,8 @@ def track_keypoints(prev_frame, curr_frame, prev_keypoints, landmarks):
                      criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01))
     
     # Calculate optical flow
+    prev_keypoints = np.array(prev_keypoints, dtype=np.float32).reshape(-1, 1, 2)
+
     curr_keypoints, status, _ = cv2.calcOpticalFlowPyrLK(prev_frame, curr_frame, prev_keypoints, None, **lk_params)
     
     if curr_keypoints is None or status is None:
@@ -32,6 +34,7 @@ def track_keypoints(prev_frame, curr_frame, prev_keypoints, landmarks):
     # Filter keypoints based on tracking status
     valid_prev_keypoints = prev_keypoints[status.flatten() == 1]
     valid_curr_keypoints = curr_keypoints[status.flatten() == 1]
+    associated_landmarks = landmarks[status.flatten() == 1, :]  # Corresponding 3D landmarks
     associated_landmarks = landmarks[status.flatten() == 1, :]  # Corresponding 3D landmarks
     
     return valid_prev_keypoints, valid_curr_keypoints, associated_landmarks

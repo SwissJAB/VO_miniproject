@@ -111,7 +111,7 @@ class VisualOdometryPipeline:
         matched_pts2_np_f_homo = np.c_[matched_pts2_np_filtered, np.ones((matched_pts2_np_filtered.shape[0], 1))].T # 3 x M
 
         # Decompose E to get R, t
-        Rot_mat, translat = self._decompose_E(E_mat, matched_pts1_np_f_homo, matched_pts2_np_f_homo)
+        Rot_mat, translat = self._decompose_E(E_mat, matched_pts2_np_f_homo, matched_pts1_np_f_homo)
 
         # Triangulate landmarks
         proj_mat1 = self.K @ np.eye(3, 4)
@@ -365,7 +365,7 @@ class VisualOdometryPipeline:
 
         prev_keypoints = S_prev['P']
         
-        print(f"Tracking {len(prev_keypoints)} keypoints...")  # Debugging
+        print(f"Tracking {prev_keypoints.shape} keypoints...")  # Debugging
         
         # Track keypoints
         valid_prev_keypoints, valid_curr_keypoints, valid_landmarks = track_keypoints(
@@ -393,8 +393,7 @@ class VisualOdometryPipeline:
             t_flat = tvec.flatten()
             T_new['R'] = R_mat
             T_new['t'] = t_flat
-
-            T_new_repeated = np.tile(T_new, (len(candidate_keypoints[0]), 1))
+            T_new_repeated = np.tile(T_new, (candidate_keypoints.shape[0], 1))
             S_new['T'] = np.r_[S_new['T'], T_new_repeated]
 
             ### Logic for adding new landmarks
@@ -403,19 +402,16 @@ class VisualOdometryPipeline:
 
             if S_new['T'].size > 0:
                 indices_to_remove = []
-                for i in range(S_new['C'].shape[1]):
+                for i in range(S_new['C'].shape[0]):
                     c = S_new['C'][i, :] # shape (2,)
                     f = S_new['F'][i, :] # shape (2,)
                     t = S_new['T'][i, :] 
-                    print("t shape:", t.shape)
-                    print("t: ", t)
                     angle_c = self._compute_angle(f, c, t[0].copy(), T_new.copy(), self.K)
                     if angle_c > self.baseline_angle_thresh:
                         M1 = self.K @ np.c_[t[0]['R'], t[0]['t']]
                         M2 = self.K @ np.c_[T_new['R'], T_new['t']]
-                        homogeneous_f = np.hstack((f, [1]))
-                        homogeneous_c = np.hstack((c, [1]))
-                        new_3d_point = linearTriangulation(homogeneous_f, homogeneous_c, M1, M2) # TODO: Should be the correct order right?
+                        new_3d_point = cv2.triangulatePoints(M1, M2, f, c)
+                        new_3d_point = new_3d_point[:3, :]
                         new_3d_points.append(new_3d_point)
                         new_3d_points_2d.append(c)
                         indices_to_remove.append(i)
@@ -427,9 +423,8 @@ class VisualOdometryPipeline:
                 print("New 3D points 2D shape before stack:", new_3d_points_2d[0].shape)
                 new_3d_points = np.column_stack(new_3d_points)
                 new_3d_points_2d = np.column_stack(new_3d_points_2d)
-                new_3d_points_2d_h = np.r_[new_3d_points_2d, np.ones((1, new_3d_points_2d.shape[1]))]
                 print("New 3D points shape:", new_3d_points.shape)
-                print("New 3D points 2D shape:", new_3d_points_2d_h.shape)
+                print("New 3D points 2D shape:", new_3d_points_2d.shape)
 
                 # Append to the existing landmarks
                 #S_new['X'] = np.c_[S_new['X'], new_3d_points]
@@ -438,12 +433,11 @@ class VisualOdometryPipeline:
                 #S_new['P'] = np.c_[S_new['P'], np.r_[new_3d_points_2d, np.ones((1, new_3d_points_2d.shape[1]))]]
 
                 # Remove these candidates from 'C' and 'F'
-                mask = np.ones(S_new['C'].shape[1], dtype=bool)
+                mask = np.ones(S_new['C'].shape[0], dtype=bool)
                 mask[indices_to_remove] = False
-                S_new['C'] = S_new['C'][:, mask]
-                S_new['F'] = S_new['F'][:, mask]
-                S_new['T'] = S_new['T'][:, mask]
-
+                S_new['C'] = S_new['C'][mask, :]
+                S_new['F'] = S_new['F'][mask, :]
+                S_new['T'] = S_new['T'][mask, :]
 
             ### Logic for PnP
 
@@ -452,20 +446,13 @@ class VisualOdometryPipeline:
             valid_prev_keypoints = valid_prev_keypoints[inliers.ravel()]
             valid_landmarks = valid_landmarks[inliers.ravel()]
 
-            # Convert into homogeneous coordinates
-            valid_prev_keypoints = np.r_[valid_prev_keypoints.T, np.ones((1, valid_prev_keypoints.shape[0]))]
-            valid_curr_keypoints = np.r_[valid_curr_keypoints.T, np.ones((1, valid_curr_keypoints.shape[0]))]
-
             # Update keypoints
             S_new['P'] = valid_curr_keypoints
-            S_new['X'] = valid_landmarks.T
+            S_new['X'] = valid_landmarks
 
             if len(new_3d_points) > 0:
-                print(f"If 2: Adding {new_3d_points.shape[1]} new landmarks.")
-                print("New 3D points shape:", new_3d_points.shape)
-                print("New 3D points 2D shape:", new_3d_points_2d_h.shape)
-                S_new['P'] = np.c_[S_new['P'], new_3d_points_2d_h]
-                S_new['X'] = np.c_[S_new['X'], new_3d_points]
+                S_new['P'] = np.r_[S_new['P'], new_3d_points_2d.T]
+                S_new['X'] = np.r_[S_new['X'], new_3d_points.T]
 
             return S_new, T_new
         else:
