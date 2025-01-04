@@ -6,14 +6,15 @@ import time
 class VisualOdometryVisualizer:
     def __init__(self):
         # Initialize the figure
-        self.fig = plt.figure(figsize=(15, 12))  # Adjusted size for new layout
+        self.fig = plt.figure(figsize=(15, 10))  # Adjusted size for new layout
+        plt.get_current_fig_manager().full_screen_toggle()
 
         # Set up the axes for plotting
-        self.ax1 = self.fig.add_subplot(231, projection='3d')  # 3D plot with fixed limits
-        self.ax2 = self.fig.add_subplot(2, 3, (2, 3))
+        self.ax1 = self.fig.add_subplot(2, 3, 5, projection='3d')  # 3D plot with fixed limits
+        self.ax2 = self.fig.add_subplot(2, 1, 1)
         self.ax3 = self.fig.add_subplot(234, projection='3d')  # 3D plot without clearing
-        self.ax4 = self.fig.add_subplot(235)  # 2D plot for number of landmarks
-        self.ax5 = self.fig.add_subplot(236)  # 2D plot for FPS
+        self.ax4 = self.fig.add_subplot(2, 3, 6)  # 2D plot for number of landmarks
+        #self.ax5 = self.fig.add_subplot(236)  # 2D plot for FPS
 
         # Define fixed axis limits for the 3D plot
         self.ax1.set_xlim([-10, 15])  # Set X-axis limit
@@ -69,7 +70,7 @@ class VisualOdometryVisualizer:
         self.ax1.cla()  # Clear the 3D plot with fixed limits
         self.ax2.cla()  # Clear the 2D image plot
         self.ax4.cla()  # Clear the landmarks count plot
-        self.ax5.cla()  # Clear the FPS plot
+        #self.ax5.cla()  # Clear the FPS plot
 
         traj = np.array(self.camera_trajectory)
         
@@ -101,8 +102,17 @@ class VisualOdometryVisualizer:
         self.ax1.set_zlim([camera_pose[2] - 15, camera_pose[2] + 15])
 
         # 2D Plot: Image and Keypoints
-        self.ax2.imshow(image, cmap='gray')  # Image in grayscale
-        self.ax2.scatter(keypoints[:, 0], keypoints[:, 1], c='g', marker='o', label='Keypoints', s=5)
+        h, w = image.shape[:2]
+        valid_mask = (
+            (keypoints[:, 0] >= 0) & (keypoints[:, 0] < w) &
+            (keypoints[:, 1] >= 0) & (keypoints[:, 1] < h)
+        )
+        keypoints_inbounds = keypoints[valid_mask]
+        self.ax2.imshow(image, cmap='gray')
+        self.ax2.scatter(keypoints_inbounds[:, 0], keypoints_inbounds[:, 1],
+                 c='g', marker='o', s=5)
+        self.ax2.set_xlim([0, w])
+        self.ax2.set_ylim([h, 0])
         self.ax2.set_title('Processed Image with Keypoints (Capped at 750 for Efficient Plotting)')
 
         # 3D Plot without clearing
@@ -139,17 +149,17 @@ class VisualOdometryVisualizer:
         self.ax4.set_title('Number of Keypoints per Frame')
         #self.ax4.legend()
 
-        # Plot the last 20 FPS values
-        if len(self.fps_values) > 20:
-            self.ax5.plot(range(len(self.fps_values) - 20, len(self.fps_values)), 
-                  self.fps_values[-20:], c='g', label='Last 20 FPS')
-        else:
-            self.ax5.plot(range(len(self.fps_values)), 
-                  self.fps_values, c='g', label='FPS')
+        # # Plot the last 20 FPS values
+        # if len(self.fps_values) > 20:
+        #     self.ax5.plot(range(len(self.fps_values) - 20, len(self.fps_values)), 
+        #           self.fps_values[-20:], c='g', label='Last 20 FPS')
+        # else:
+        #     self.ax5.plot(range(len(self.fps_values)), 
+        #           self.fps_values, c='g', label='FPS')
 
-        self.ax5.set_xlabel('Frame Number')
-        self.ax5.set_ylabel('FPS')
-        self.ax5.set_title('FPS per Frame of the Last 20 Frames')
+        # self.ax5.set_xlabel('Frame Number')
+        # self.ax5.set_ylabel('FPS')
+        # self.ax5.set_title('FPS per Frame of the Last 20 Frames')
         #self.ax5.legend()
 
         # Show the plot
