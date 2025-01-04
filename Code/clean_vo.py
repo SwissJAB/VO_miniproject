@@ -111,7 +111,7 @@ class VisualOdometryPipeline:
         matched_pts2_np_f_homo = np.c_[matched_pts2_np_filtered, np.ones((matched_pts2_np_filtered.shape[0], 1))].T # 3 x M
 
         # Decompose E to get R, t
-        Rot_mat, translat = self._decompose_E(E_mat, matched_pts1_np_f_homo, matched_pts2_np_f_homo)
+        Rot_mat, translat = self._decompose_E(E_mat, matched_pts2_np_f_homo, matched_pts1_np_f_homo)
 
         # Triangulate landmarks
         proj_mat1 = self.K @ np.eye(3, 4)
@@ -402,12 +402,10 @@ class VisualOdometryPipeline:
 
             if S_new['T'].size > 0:
                 indices_to_remove = []
-                for i in range(S_new['C'].shape[1]):
+                for i in range(S_new['C'].shape[0]):
                     c = S_new['C'][i, :] # shape (2,)
                     f = S_new['F'][i, :] # shape (2,)
                     t = S_new['T'][i, :] 
-                    print("t shape:", t.shape)
-                    print("t: ", t)
                     angle_c = self._compute_angle(f, c, t[0].copy(), T_new.copy(), self.K)
                     if angle_c > self.baseline_angle_thresh:
                         M1 = self.K @ np.c_[t[0]['R'], t[0]['t']]
