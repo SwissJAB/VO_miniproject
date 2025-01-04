@@ -19,6 +19,8 @@ from feature_tracking.klt_tracking import track_keypoints
 from visualizer import VisualOdometryVisualizer
 
 
+
+
 class VisualOdometryPipeline:
     def __init__(self, config_path='Code/config.yaml'):
         """
@@ -52,6 +54,10 @@ class VisualOdometryPipeline:
         self.global_poses = []
         self.visualizer = VisualOdometryVisualizer()
 
+                # Parameters for Lucas-Kanade optical flow
+        self.lk_params = dict(winSize=(self.config['LK']['win_size'], self.config['LK']['win_size']),
+                        maxLevel=self.config['LK']['max_level'],
+                        criteria=(cv2.TERM_CRITERIA_COUNT | cv2.TERM_CRITERIA_EPS, self.config['LK']['crit_count'], self.config['LK']['crit_eps']))
 
     def initialize(self):
         #delete previous folders
@@ -320,30 +326,17 @@ class VisualOdometryPipeline:
         S_new = S_prev.copy() # TODO: Make sure we put new stuff in here
         T_new = T_prev.copy()
         curr_gray = frame  
-    
-        # Parameters for Lucas-Kanade optical flow
-        lk_params = dict(winSize=(self.config['LK']['win_size'], self.config['LK']['win_size']),
-                        maxLevel=self.config['LK']['max_level'],
-                        criteria=(cv2.TERM_CRITERIA_COUNT | cv2.TERM_CRITERIA_EPS, self.config['LK']['crit_count'], self.config['LK']['crit_eps']))
         
         # Calculate optical flow
         if S_prev['C'].shape[0] > 0:
-            tracked_candidate_keypoints, status, _ = cv2.calcOpticalFlowPyrLK(prev_frame, curr_gray, np.float32(S_prev['C']), None, **lk_params)
-            print("Tracked candidate keypoints shape:", tracked_candidate_keypoints.shape)
+            tracked_candidate_keypoints, status, _ = cv2.calcOpticalFlowPyrLK(prev_frame, curr_gray, np.float32(S_prev['C']), None, **self.lk_params)
 
             S_new['C'] = tracked_candidate_keypoints[status.flatten() == 1]
-            print("T shape", S_prev['T'].shape)
-            print("F shape", S_prev['F'].shape)
             S_new['F'] = S_prev['F'][status.flatten() == 1, :]
             S_new['T'] = S_prev['T'][status.flatten() == 1, :]
 
-            # Find new candidate keypoints
-        if self.descriptor_name == 'harris':
-            candidate_keypoints, _ = self._detect_harris(curr_gray) 
-        elif self.descriptor_name == 'shi_tomasi':
-            candidate_keypoints, _ = self._detect_shi_tomasi(curr_gray) 
-        elif self.descriptor_name == 'sift':
-            candidate_keypoints, _ = self._detect_sift(curr_gray)
+        
+        candidate_keypoints, _ = self._detect_sift(curr_gray)
         
         # Unpack the keypoints into a numpy array
         candidate_keypoints = np.array([kp.pt for kp in candidate_keypoints]) # shape (N, 2)
@@ -364,7 +357,7 @@ class VisualOdometryPipeline:
         
         # Track keypoints
         valid_prev_keypoints, valid_curr_keypoints, valid_landmarks = track_keypoints(
-            prev_frame, curr_gray, np.float32(prev_keypoints), S_prev['X']
+            prev_frame, curr_gray, np.float32(prev_keypoints), S_prev['X'], self.lk_params
         )
 
         # Use PnP with ransac
