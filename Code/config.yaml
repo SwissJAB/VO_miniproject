@@ -54,7 +54,7 @@ RANSAC:
 
 PNPRANSAC:
   iterations: 1000
-  reprojection_error: 8.0
+  reprojection_error: 4.0
   prob: 0.99
 
 CONT_VO:
