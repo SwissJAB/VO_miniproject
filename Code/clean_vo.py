@@ -393,14 +393,6 @@ class VisualOdometryPipeline:
             T_new['R'] = R_mat
             T_new['t'] = t_flat
 
-            ## TODO: This is maybe needed because of numpy references
-            # T_copies = []
-            # for _ in range(candidate_keypoints.shape[0]):
-            #     T_copies.append(copy.deepcopy(T_new))  # each item a brand-new dict
-
-            # T_copies = np.array(T_copies).reshape(-1, 1)  # shape (num,1)
-            # S_new['T'] = np.r_[S_new['T'], T_copies]
-
             T_new_repeated = np.tile(T_new, (candidate_keypoints.shape[0], 1))
             S_new['T'] = np.r_[S_new['T'], T_new_repeated]
 
@@ -408,7 +400,6 @@ class VisualOdometryPipeline:
             S_new, new_3d_points, new_3d_points_2d = self.get_new_landmarks(S_new, T_new)
 
             ### Logic for PnP
-
             # Filter valid keypoints using the inliers from solvePnPRansac
             valid_curr_keypoints = valid_curr_keypoints[inliers.ravel()]
             valid_prev_keypoints = valid_prev_keypoints[inliers.ravel()]
@@ -442,9 +433,14 @@ class VisualOdometryPipeline:
                     M2 = self.K @ np.c_[T_new['R'], T_new['t']]
                     new_3d_point = cv2.triangulatePoints(M1, M2, f, c)
                     new_3d_point = new_3d_point[:3, :]/new_3d_point[3,:]
-                    new_3d_points.append(new_3d_point)
-                    new_3d_points_2d.append(c)
-                    indices_to_remove.append(i)
+
+                    # Supposed to filter out points behind the camera
+                    new_point_cam = T_new['R'] @ new_3d_point + T_new['t'].reshape(-1,1)
+                    if new_point_cam[2, 0] > 0:
+                        # If z > 0 accept it
+                        new_3d_points.append(new_3d_point)
+                        new_3d_points_2d.append(c)
+                        indices_to_remove.append(i)
 
 
         if len(new_3d_points) > 0:
