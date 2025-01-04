@@ -49,7 +49,8 @@ class VisualOdometryPipeline:
             self.K = np.genfromtxt(K_path, delimiter=',', dtype=float).reshape(3, 3)
         if self.dataset_curr == 'malaga':
             self.K = np.array([[621.18428, 0, 404.0076], [0, 621.18428, 309.05989], [0, 0, 1]])
-
+        if self.dataset_curr == 'kitti':
+            self.K = np.array([[707.0912, 0, 601.8873], [0, 707.0912, 183.1104], [0, 0, 1]])
         # Chosen descriptor from config
         self.curr_desc = self.config['FEATURES']['curr_detector']
         self.descriptor_name = self.config['FEATURES']['detectors'][self.curr_desc]
