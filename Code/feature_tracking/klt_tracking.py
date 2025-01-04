@@ -20,7 +20,7 @@ def track_keypoints(prev_frame, curr_frame, prev_keypoints, landmarks):
     # Parameters for Lucas-Kanade optical flow
     lk_params = dict(winSize=(21, 21),
                      maxLevel=3,
-                     criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01))
+                     criteria=(cv2.TERM_CRITERIA_COUNT | cv2.TERM_CRITERIA_EPS, 30, 0.01))
     
     # Calculate optical flow
     print("previous frame shape:", prev_frame.shape)
