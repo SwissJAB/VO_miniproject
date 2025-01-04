@@ -152,6 +152,7 @@ class VisualOdometryPipeline:
         
         print("Starting continuous operation...")
         prev_frame = self.img2
+        self.visualizer.update_visualizations(S_prev['X'], T_prev['t'], prev_frame, S_prev['P'])
         for frame in self._get_next_frames():
             S_i, T_WC_i = self._process_frame(frame, prev_frame, S_prev, T_prev)
             self.global_poses.append(T_WC_i)
@@ -327,7 +328,6 @@ class VisualOdometryPipeline:
         
         # Calculate optical flow
         if S_prev['C'].shape[0] > 0:
-            S_prev['C'] = S_prev['C']
             tracked_candidate_keypoints, status, _ = cv2.calcOpticalFlowPyrLK(prev_frame, curr_gray, np.float32(S_prev['C']), None, **lk_params)
             print("Tracked candidate keypoints shape:", tracked_candidate_keypoints.shape)
 
