@@ -43,7 +43,7 @@ MATCHING:
   ratio: 0.75
 
 LK:
-  win_size: 11
+  win_size: 21
   max_level: 3
   crit_count: 30
   crit_eps: 0.01
@@ -58,8 +58,9 @@ PNPRANSAC:
   prob: 0.99
 
 CONT_VO:
-  baseline_angle_thresh: 5 # Degree threshold for baseline angle
-  kp_dist_thresh: 4.0 # min distance between keypoints 
+  baseline_angle_thresh: 3 # Degree threshold for baseline angle
+  kp_dist_thresh: 12.0 # min distance between keypoints 
+  max_candidate_points: 150 # max number of new candidate points
 
 PLOTS:
   show: True

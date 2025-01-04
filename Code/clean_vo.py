@@ -130,8 +130,6 @@ class VisualOdometryPipeline:
         landmarks = cv2.triangulatePoints(proj_mat1, proj_mat2, matched_pts1_np_filtered.T, matched_pts2_np_filtered.T)
         landmarks = landmarks[:3,:]/landmarks[3, :]
 
-        ### END SIFT stuff second try ###
-
         S_1 = {
             'P': matched_pts2_np_filtered,          # shape (M, 2)
             'X': landmarks.T,                       # shape (M, 3)
@@ -160,18 +158,33 @@ class VisualOdometryPipeline:
         # 2 For each subsequent frame
         S_prev = S_1
         T_prev = T_WC_1
+
+        n_X_init =  S_1['X'].shape[0]
+        n_P_init =  S_1['P'].shape[0]
+        n_T_init =  S_1['T'].shape[0]
+        n_C_init =  S_1['C'].shape[0]
+        n_F_init =  S_1['F'].shape[0]
         
         print("Starting continuous operation...")
         prev_frame = self.img2
-        self.visualizer.update_visualizations(S_prev['X'], T_prev['t'], prev_frame, S_prev['P'])
+        first_t = -T_prev['R'].T @ T_prev['t']
+        self.visualizer.update_visualizations(S_prev['X'], first_t, prev_frame, S_prev['P'])
         for frame in self._get_next_frames():
             S_i, T_WC_i = self._process_frame(frame, prev_frame, S_prev, T_prev)
             self.global_poses.append(T_WC_i)
-            print("X:", S_i['X'].shape)
-            print("P:", S_i['P'].shape)
-            print("T:", S_i['T'].shape)
-            print("C:", S_i['C'].shape)
-            print("F:", S_i['F'].shape)
+
+            n_X =  S_i['X'].shape
+            n_P =  S_i['P'].shape
+            n_T =  S_i['T'].shape
+            n_C =  S_i['C'].shape
+            n_F =  S_i['F'].shape
+
+            print("X:", n_X)
+            print("P:", n_P)
+            print("T:", n_T)
+            print("C:", n_C)
+            print("F:", n_F)
+
             for kp in S_i['P']:
                 # Check if the coordinates are within the image
                 if kp[0] < 0 or kp[0] >= frame.shape[1] or kp[1] < 0 or kp[1] >= frame.shape[0]:
@@ -358,14 +371,22 @@ class VisualOdometryPipeline:
         candidate_keypoints = self._remove_duplicates(candidate_keypoints.T, S_new['P'].T).T
         candidate_keypoints = self._remove_duplicates(candidate_keypoints.T, S_new['C'].T).T
         print("Candidate keypoints shape after removing duplicates:", candidate_keypoints.shape)
-        # Add the candidate keypoints to the candidate keypoints
+        
+        # Only take max keypoints
+        print("Candidate keypoints shape before limiting:", candidate_keypoints.shape)
+        if candidate_keypoints.shape[0] > self.config['CONT_VO']['max_candidate_points']:
+            candidate_keypoints = candidate_keypoints[:, :self.config['CONT_VO']['max_candidate_points']]
+            print("Candidate keypoints shape after limiting:", candidate_keypoints.shape)
+
+
+
+
         S_new['C'] = np.r_[S_new['C'], candidate_keypoints]
-        # Add the new candidate keypoints to the first observation
         S_new['F'] = np.r_[S_new['F'], candidate_keypoints]
 
         prev_keypoints = S_prev['P']
         
-        print(f"Tracking {prev_keypoints.shape} keypoints...")  # Debugging
+        print(f"Tracking {prev_keypoints.shape} keypoints...")
         
         # Track keypoints
         valid_prev_keypoints, valid_curr_keypoints, valid_landmarks = track_keypoints(
@@ -427,6 +448,9 @@ class VisualOdometryPipeline:
                 c = S_new['C'][i, :] # shape (2,)
                 f = S_new['F'][i, :] # shape (2,)
                 t = S_new['T'][i, :] 
+                if len(new_3d_points) >= 150:
+                    print("Max number of new points reached, breaking...")
+                    break
                 angle_c = self._compute_angle(f, c, t[0].copy(), T_new.copy(), self.K)
                 if angle_c > self.baseline_angle_thresh:
                     M1 = self.K @ np.c_[t[0]['R'], t[0]['t']]
