@@ -330,21 +330,23 @@ class VisualOdometryPipeline:
         curr_gray = frame  
     
         # Parameters for Lucas-Kanade optical flow
-        lk_params = dict(winSize=(21, 21),
-                        maxLevel=3,
-                        criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01))
+        lk_params = dict(winSize=(self.config['LK']['win_size'], self.config['LK']['win_size']),
+                        maxLevel=self.config['LK']['max_level'],
+                        criteria=(cv2.TERM_CRITERIA_COUNT | cv2.TERM_CRITERIA_EPS, self.config['LK']['crit_count'], self.config['LK']['crit_eps']))
         
         # Calculate optical flow
         if S_prev['C'].shape[0] > 0:
             S_prev['C'] = S_prev['C']
             tracked_candidate_keypoints, status, _ = cv2.calcOpticalFlowPyrLK(prev_frame, curr_gray, np.float32(S_prev['C']), None, **lk_params)
             print("Tracked candidate keypoints shape:", tracked_candidate_keypoints.shape)
-            for kp in tracked_candidate_keypoints:
+            
+            
+            tracked_cand_kps = tracked_candidate_keypoints[status.flatten() == 1]
+            for kp in tracked_cand_kps:
                 # Check if the coordinates are within the image
                 if kp[0] < 0 or kp[0] >= frame.shape[1] or kp[1] < 0 or kp[1] >= frame.shape[0]:
-                    print(f"Keypoint out of bounds in _process_frame for tracked kps with kp: {kp}")
-            #tracked_candidate_keypoints = tracked_candidate_keypoints.reshape(-1, 2)
-            S_new['C'] = tracked_candidate_keypoints[status.flatten() == 1]
+                    print(f"Keypoint out of bounds in _process_frame with tracked candidate kps with kp: {kp}")
+            S_new['C'] = tracked_cand_kps
             print("T shape", S_prev['T'].shape)
             print("F shape", S_prev['F'].shape)
             S_new['F'] = S_prev['F'][status.flatten() == 1, :]
