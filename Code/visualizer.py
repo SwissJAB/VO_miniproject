@@ -32,7 +32,7 @@ class VisualOdometryVisualizer:
 
         # 3D Plot: Landmarks and Camera Pose
         self.ax1.scatter(landmarks_3d[:, 0], landmarks_3d[:, 1], landmarks_3d[:, 2], c='b', label='Landmarks')
-        self.ax1.scatter(-camera_pose[0], -camera_pose[1], -camera_pose[2], c='r', label='Camera Pose')
+        self.ax1.scatter(camera_pose[0], camera_pose[1], camera_pose[2], c='r', label='Camera Pose')
         self.ax1.set_xlabel('X')
         self.ax1.set_ylabel('Y')
         self.ax1.set_zlabel('Z')
