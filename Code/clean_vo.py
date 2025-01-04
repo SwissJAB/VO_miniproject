@@ -160,6 +160,10 @@ class VisualOdometryPipeline:
             print("T:", S_i['T'].shape)
             print("C:", S_i['C'].shape)
             print("F:", S_i['F'].shape)
+            for kp in S_i['P']:
+                # Check if the coordinates are within the image
+                if kp[0] < 0 or kp[0] >= frame.shape[1] or kp[1] < 0 or kp[1] >= frame.shape[0]:
+                    print(f"Keypoint out of bounds in frame with kp: {kp}")
 
             S_prev = S_i
             T_prev = T_WC_i
@@ -335,6 +339,10 @@ class VisualOdometryPipeline:
             S_prev['C'] = S_prev['C']
             tracked_candidate_keypoints, status, _ = cv2.calcOpticalFlowPyrLK(prev_frame, curr_gray, np.float32(S_prev['C']), None, **lk_params)
             print("Tracked candidate keypoints shape:", tracked_candidate_keypoints.shape)
+            for kp in tracked_candidate_keypoints:
+                # Check if the coordinates are within the image
+                if kp[0] < 0 or kp[0] >= frame.shape[1] or kp[1] < 0 or kp[1] >= frame.shape[0]:
+                    print(f"Keypoint out of bounds in _process_frame for tracked kps with kp: {kp}")
             #tracked_candidate_keypoints = tracked_candidate_keypoints.reshape(-1, 2)
             S_new['C'] = tracked_candidate_keypoints[status.flatten() == 1]
             print("T shape", S_prev['T'].shape)
@@ -352,6 +360,10 @@ class VisualOdometryPipeline:
         
         # Unpack the keypoints into a numpy array
         candidate_keypoints = np.array([kp.pt for kp in candidate_keypoints]) # shape (N, 2)
+        for kp in candidate_keypoints:
+            # Check if the coordinates are within the image
+            if kp[0] < 0 or kp[0] >= frame.shape[1] or kp[1] < 0 or kp[1] >= frame.shape[0]:
+                print(f"Keypoint out of bounds in _process_frame with new candidate kps with kp: {kp}")
             
         # Add the new candidate keypoints to the candidate keypoints
         print("Candidate keypoints shape before removing duplicates:", candidate_keypoints.shape)
@@ -369,7 +381,7 @@ class VisualOdometryPipeline:
         
         # Track keypoints
         valid_prev_keypoints, valid_curr_keypoints, valid_landmarks = track_keypoints(
-            self.img2, curr_gray, np.float32(prev_keypoints), S_prev['X']
+            prev_frame, curr_gray, np.float32(prev_keypoints), S_prev['X']
         )
 
         # Use PnP with ransac
