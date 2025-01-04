@@ -38,6 +38,12 @@ MATCHING:
   k: 2
   ratio: 0.75
 
+LK:
+  win_size: 11
+  max_level: 3
+  crit_count: 30
+  crit_eps: 0.01
+
 RANSAC:
   prob: 0.999
   threshold: 2.0
