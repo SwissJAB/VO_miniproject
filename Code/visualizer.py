@@ -28,6 +28,7 @@ class VisualOdometryVisualizer:
         image: 2D array (image being processed)
         keypoints: 2xN array of keypoints (x, y)
         """
+        camera_pose = -camera_pose
         self.camera_trajectory.append(camera_pose)
         # Clear previous plots
         self.ax1.cla()  # Clear the 3D plot
