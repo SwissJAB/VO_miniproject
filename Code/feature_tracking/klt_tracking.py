@@ -35,11 +35,9 @@ def track_keypoints(prev_frame, curr_frame, prev_keypoints, landmarks):
     valid_prev_keypoints = prev_keypoints[status.flatten() == 1]
     valid_curr_keypoints = curr_keypoints[status.flatten() == 1]
     associated_landmarks = landmarks[status.flatten() == 1, :]  # Corresponding 3D landmarks
+    associated_landmarks = landmarks[status.flatten() == 1, :]  # Corresponding 3D landmarks
     
-    valid_prev_keypoints = valid_prev_keypoints.reshape(-1, 2)  # Reshape back to original (N, 2)
-    valid_curr_keypoints = valid_curr_keypoints.reshape(-1, 2)  # Reshape back to original (N, 2)
-
-    return valid_prev_keypoints, valid_curr_keypoints, associated_landmarks
+    return np.squeeze(valid_prev_keypoints), np.squeeze(valid_curr_keypoints), associated_landmarks
 
 def draw_keypoints(frame, keypoints, color=(0, 255, 0)):
     """
