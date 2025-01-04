@@ -330,12 +330,13 @@ class VisualOdometryPipeline:
         # Calculate optical flow
         if S_prev['C'].shape[0] > 0:
             tracked_candidate_keypoints, status, _ = cv2.calcOpticalFlowPyrLK(prev_frame, curr_gray, np.float32(S_prev['C']), None, **self.lk_params)
-
+            for i, kp in enumerate(tracked_candidate_keypoints):
+                if kp[0] < 0 or kp[0] > curr_gray.shape[1] or kp[1] < 0 or kp[1] > curr_gray.shape[0]:
+                    status[i] = 0
             S_new['C'] = tracked_candidate_keypoints[status.flatten() == 1]
             S_new['F'] = S_prev['F'][status.flatten() == 1, :]
             S_new['T'] = S_prev['T'][status.flatten() == 1, :]
 
-        
         candidate_keypoints, _ = self._detect_sift(curr_gray)
         
         # Unpack the keypoints into a numpy array
@@ -384,47 +385,7 @@ class VisualOdometryPipeline:
             S_new['T'] = np.r_[S_new['T'], T_new_repeated]
 
             ### Logic for adding new landmarks
-            new_3d_points = []
-            new_3d_points_2d = []
-
-            if S_new['T'].size > 0:
-                indices_to_remove = []
-                for i in range(S_new['C'].shape[0]):
-                    c = S_new['C'][i, :] # shape (2,)
-                    f = S_new['F'][i, :] # shape (2,)
-                    t = S_new['T'][i, :] 
-                    angle_c = self._compute_angle(f, c, t[0].copy(), T_new.copy(), self.K)
-                    if angle_c > self.baseline_angle_thresh:
-                        M1 = self.K @ np.c_[t[0]['R'], t[0]['t']]
-                        M2 = self.K @ np.c_[T_new['R'], T_new['t']]
-                        new_3d_point = cv2.triangulatePoints(M1, M2, f, c)
-                        new_3d_point = new_3d_point[:3, :]/new_3d_point[3,:]
-                        new_3d_points.append(new_3d_point)
-                        new_3d_points_2d.append(c)
-                        indices_to_remove.append(i)
-
-
-            if len(new_3d_points) > 0:
-                print(f"if 1: Adding {len(new_3d_points)} new landmarks.")
-                print("New 3D points shape before stack:", new_3d_points[0].shape)
-                print("New 3D points 2D shape before stack:", new_3d_points_2d[0].shape)
-                new_3d_points = np.column_stack(new_3d_points)
-                new_3d_points_2d = np.column_stack(new_3d_points_2d)
-                print("New 3D points shape:", new_3d_points.shape)
-                print("New 3D points 2D shape:", new_3d_points_2d.shape)
-
-                # Append to the existing landmarks
-                #S_new['X'] = np.c_[S_new['X'], new_3d_points]
-
-                # Also keep track of the 2D “feature-plane” location in P if you want
-                #S_new['P'] = np.c_[S_new['P'], np.r_[new_3d_points_2d, np.ones((1, new_3d_points_2d.shape[1]))]]
-
-                # Remove these candidates from 'C' and 'F'
-                mask = np.ones(S_new['C'].shape[0], dtype=bool)
-                mask[indices_to_remove] = False
-                S_new['C'] = S_new['C'][mask, :]
-                S_new['F'] = S_new['F'][mask, :]
-                S_new['T'] = S_new['T'][mask, :]
+            S_new, new_3d_points, new_3d_points_2d = self.get_new_landmarks(S_new, T_new)
 
             ### Logic for PnP
 
@@ -445,7 +406,41 @@ class VisualOdometryPipeline:
         else:
             print("Pose was not calculated.")
 
-    # TODO: This might be a suboptimal way to remove duplicates
+    def get_new_landmarks(self, S_new, T_new):
+        new_3d_points = []
+        new_3d_points_2d = []
+
+        if S_new['T'].size > 0:
+            indices_to_remove = []
+            for i in range(S_new['C'].shape[0]):
+                c = S_new['C'][i, :] # shape (2,)
+                f = S_new['F'][i, :] # shape (2,)
+                t = S_new['T'][i, :] 
+                angle_c = self._compute_angle(f, c, t[0].copy(), T_new.copy(), self.K)
+                if angle_c > self.baseline_angle_thresh:
+                    M1 = self.K @ np.c_[t[0]['R'], t[0]['t']]
+                    M2 = self.K @ np.c_[T_new['R'], T_new['t']]
+                    new_3d_point = cv2.triangulatePoints(M1, M2, f, c)
+                    new_3d_point = new_3d_point[:3, :]/new_3d_point[3,:]
+                    new_3d_points.append(new_3d_point)
+                    new_3d_points_2d.append(c)
+                    indices_to_remove.append(i)
+
+
+        if len(new_3d_points) > 0:
+            new_3d_points = np.column_stack(new_3d_points)
+            new_3d_points_2d = np.column_stack(new_3d_points_2d)
+
+            # Remove these candidates from 'C' and 'F'
+            mask = np.ones(S_new['C'].shape[0], dtype=bool)
+            mask[indices_to_remove] = False
+            S_new['C'] = S_new['C'][mask, :]
+            S_new['F'] = S_new['F'][mask, :]
+            S_new['T'] = S_new['T'][mask, :]
+
+        return S_new, new_3d_points, new_3d_points_2d
+
+
     def _remove_duplicates(self, new_kps, existing_kps):
         """
         new_kps:      shape (2, N_new)
