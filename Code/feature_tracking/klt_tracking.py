@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import os
 
-def track_keypoints(prev_frame, curr_frame, prev_keypoints, landmarks):
+def track_keypoints(prev_frame, curr_frame, prev_keypoints, landmarks, lk_params):
     """
     Tracks keypoints from the previous frame to the current frame using KLT optical flow.
     
@@ -17,14 +17,7 @@ def track_keypoints(prev_frame, curr_frame, prev_keypoints, landmarks):
         valid_curr_keypoints (ndarray): Valid tracked keypoints in the current frame.
         associated_landmarks (ndarray): Corresponding 3D landmarks.
     """
-    # Parameters for Lucas-Kanade optical flow
-    lk_params = dict(winSize=(21, 21),
-                     maxLevel=3,
-                     criteria=(cv2.TERM_CRITERIA_COUNT | cv2.TERM_CRITERIA_EPS, 30, 0.01))
-    
     # Calculate optical flow
-    print("previous frame shape:", prev_frame.shape)
-    print("curr shape:", curr_frame.shape)
     curr_keypoints, status, _ = cv2.calcOpticalFlowPyrLK(prev_frame, curr_frame, prev_keypoints, None, **lk_params)
     
     if curr_keypoints is None or status is None:
