@@ -17,7 +17,7 @@ class VisualOdometryVisualizer:
         self.ax1.set_zlim([-10, 15])  # Set Z-axis limit
 
         self.camera_trajectory = []
-        self.previous_landmarks = None
+        # self.previous_landmarks = None
 
     def update_visualizations(self, landmarks_3d, camera_pose, image, keypoints):
         """
@@ -41,13 +41,13 @@ class VisualOdometryVisualizer:
         self.ax1.plot(traj[:, 0], traj[:, 1], traj[:, 2], c='r', label='Camera Trajectory')
 
         # Plot previously seen landmarks in green
-        if self.previous_landmarks is not None:
-            self.ax1.scatter(
-                self.previous_landmarks[:, 0], 
-                self.previous_landmarks[:, 1], 
-                self.previous_landmarks[:, 2], 
-                c='g', label='Previous Landmarks'
-            )
+        # if self.previous_landmarks is not None:
+        #     self.ax1.scatter(
+        #         self.previous_landmarks[:, 0], 
+        #         self.previous_landmarks[:, 1], 
+        #         self.previous_landmarks[:, 2], 
+        #         c='g', label='Previous Landmarks'
+        #     )
 
         # Plot current landmarks in blue
         self.ax1.scatter(
@@ -58,7 +58,7 @@ class VisualOdometryVisualizer:
         )
 
         # Update previous landmarks
-        self.previous_landmarks = landmarks_3d
+        # self.previous_landmarks = landmarks_3d
 
         # Plot current camera pose
         self.ax1.scatter(camera_pose[0], camera_pose[1], camera_pose[2], c='r', s=10, label='Camera Pose')
