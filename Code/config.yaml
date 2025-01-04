@@ -32,7 +32,6 @@ SIFT:
   contrast_threshold: 0.04
   sigma: 1.6
   n_otave_layers: 3
-  match_lambda: 4
 
 MATCHING:
   k: 2
@@ -54,8 +53,8 @@ PNPRANSAC:
   prob: 0.99
 
 CONT_VO:
-  baseline_angle_thresh: 15 # Degree threshold for baseline angle
-  kp_dist_thresh: 8.0 # min distance between keypoints 
+  baseline_angle_thresh: 5 # Degree threshold for baseline angle
+  kp_dist_thresh: 4.0 # min distance between keypoints 
 
 PLOTS:
   show: True

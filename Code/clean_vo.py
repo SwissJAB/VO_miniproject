@@ -254,9 +254,9 @@ class VisualOdometryPipeline:
 
         if self.config["PLOTS"]["show"]:
             keypoint_img = cv2.drawKeypoints(img, kp, None, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-            cv2.imshow("Keypoints before cutting", keypoint_img)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
+            # cv2.imshow("Keypoints before cutting", keypoint_img)
+            # cv2.waitKey(0)
+            # cv2.destroyAllWindows()
 
         if self.config["PLOTS"]["save"]:
             end_time = time.time()
@@ -370,7 +370,7 @@ class VisualOdometryPipeline:
             iterationsCount=self.config['PNPRANSAC']['iterations'],
             reprojectionError=self.config['PNPRANSAC']['reprojection_error'],
             confidence=self.config['PNPRANSAC']['prob'],
-            flags=cv2.SOLVEPNP_EPNP
+            flags=cv2.SOLVEPNP_ITERATIVE
         )
         if self.config["PLOTS"]["save"]:
             save_path = self.config["PLOTS"]["save_path"]
