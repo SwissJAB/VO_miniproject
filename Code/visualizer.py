@@ -12,9 +12,11 @@ class VisualOdometryVisualizer:
         self.ax2 = self.fig.add_subplot(122)  # 2D image plot
 
         # Define fixed axis limits for the 3D plot
-        self.ax1.set_xlim([-10, 60])  # Set X-axis limit
-        self.ax1.set_ylim([-10, 60])  # Set Y-axis limit
-        self.ax1.set_zlim([-10, 10])  # Set Z-axis limit
+        self.ax1.set_xlim([-5, 10])  # Set X-axis limit
+        self.ax1.set_ylim([-5, 10])  # Set Y-axis limit
+        self.ax1.set_zlim([-5, 10])  # Set Z-axis limit
+
+        self.camera_trajectory = []
 
     def update_visualizations(self, landmarks_3d, camera_pose, image, keypoints):
         """
@@ -26,9 +28,13 @@ class VisualOdometryVisualizer:
         image: 2D array (image being processed)
         keypoints: 2xN array of keypoints (x, y)
         """
+        self.camera_trajectory.append(camera_pose)
         # Clear previous plots
         self.ax1.cla()  # Clear the 3D plot
         self.ax2.cla()  # Clear the 2D image plot
+
+        traj = np.array(self.camera_trajectory)
+        self.ax1.plot(traj[:, 0], traj[:, 1], traj[:, 2], c='r', label='Camera Trajectory')
 
         # 3D Plot: Landmarks and Camera Pose
         self.ax1.scatter(landmarks_3d[:, 0], landmarks_3d[:, 1], landmarks_3d[:, 2], c='b', label='Landmarks')
@@ -39,9 +45,9 @@ class VisualOdometryVisualizer:
         self.ax1.legend()
 
         # Set the axis limits to prevent rescaling
-        self.ax1.set_xlim([-10, 60])  # Keep fixed limits for X-axis
-        self.ax1.set_ylim([-50, 50])  # Keep fixed limits for Y-axis
-        self.ax1.set_zlim([-10, 10])  # Keep fixed limits for Z-axis
+        self.ax1.set_xlim([-5, 10])  # Keep fixed limits for X-axis
+        self.ax1.set_ylim([-5, 10])  # Keep fixed limits for Y-axis
+        self.ax1.set_zlim([-5, 10])  # Keep fixed limits for Z-axis
 
         # 2D Plot: Image and Keypoints
         self.ax2.imshow(image, cmap='gray')  # Image in grayscale
