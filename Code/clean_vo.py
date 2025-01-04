@@ -4,6 +4,7 @@ import numpy as np
 import time
 import yaml
 import os
+import copy
 
 from descriptor_utils import get_descriptors_harris, get_descriptors_st, get_descriptors_harris_cv2, get_descriptors_st_cv2
 # from get_descriptors.match_descriptors import matchDescriptors
@@ -43,8 +44,11 @@ class VisualOdometryPipeline:
         
 
         # Read the camera calibration
-        K_path = self.data_rootdir + self.dataset_curr + '/K.txt'
-        self.K = np.genfromtxt(K_path, delimiter=',', dtype=float).reshape(3, 3)
+        if self.dataset_curr == 'parking':
+            K_path = self.data_rootdir + self.dataset_curr + '/K.txt'
+            self.K = np.genfromtxt(K_path, delimiter=',', dtype=float).reshape(3, 3)
+        if self.dataset_curr == 'malaga':
+            self.K = np.array([[621.18428, 0, 404.0076], [0, 621.18428, 309.05989], [0, 0, 1]])
 
         # Chosen descriptor from config
         self.curr_desc = self.config['FEATURES']['curr_detector']
@@ -175,7 +179,13 @@ class VisualOdometryPipeline:
             S_prev = S_i
             T_prev = T_WC_i
             prev_frame = frame
-            self.visualizer.update_visualizations(S_i['X'], T_WC_i['t'], frame, S_i['P'])
+
+            t_cam_world = -T_WC_i['R'].T @ T_WC_i['t']
+
+
+
+            self.visualizer.update_visualizations(S_i['X'], t_cam_world, frame, S_i['P'])
+            # self.visualizer.update_visualizations(S_i['X'], T_WC_i['t'], frame, S_i['P'])
             print("----------------------------------------CONT----------------------------------------")
             # print("S: ", S_prev)
             print("T: ", T_prev)
@@ -254,9 +264,9 @@ class VisualOdometryPipeline:
 
         if self.config["PLOTS"]["show"]:
             keypoint_img = cv2.drawKeypoints(img, kp, None, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-            cv2.imshow("Keypoints before cutting", keypoint_img)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
+            # cv2.imshow("Keypoints before cutting", keypoint_img)
+            # cv2.waitKey(0)
+            # cv2.destroyAllWindows()
 
         if self.config["PLOTS"]["save"]:
             end_time = time.time()
@@ -370,7 +380,7 @@ class VisualOdometryPipeline:
             iterationsCount=self.config['PNPRANSAC']['iterations'],
             reprojectionError=self.config['PNPRANSAC']['reprojection_error'],
             confidence=self.config['PNPRANSAC']['prob'],
-            flags=cv2.SOLVEPNP_EPNP
+            flags=cv2.SOLVEPNP_ITERATIVE
         )
         if self.config["PLOTS"]["save"]:
             save_path = self.config["PLOTS"]["save_path"]
@@ -381,6 +391,15 @@ class VisualOdometryPipeline:
             t_flat = tvec.flatten()
             T_new['R'] = R_mat
             T_new['t'] = t_flat
+
+            ## TODO: This is maybe needed because of numpy references
+            # T_copies = []
+            # for _ in range(candidate_keypoints.shape[0]):
+            #     T_copies.append(copy.deepcopy(T_new))  # each item a brand-new dict
+
+            # T_copies = np.array(T_copies).reshape(-1, 1)  # shape (num,1)
+            # S_new['T'] = np.r_[S_new['T'], T_copies]
+
             T_new_repeated = np.tile(T_new, (candidate_keypoints.shape[0], 1))
             S_new['T'] = np.r_[S_new['T'], T_new_repeated]
 
@@ -496,25 +515,39 @@ class VisualOdometryPipeline:
         """
         Generator to yield frames from the dataset for continuous operation.
         """
-        dataset_path = os.path.join(self.data_rootdir, self.dataset_curr, 'images')
-        image_files = sorted([
-            os.path.join(dataset_path, f) 
-            for f in os.listdir(dataset_path) 
-            if f.endswith(('.png', '.jpg', '.jpeg'))
-        ])
+        if self.dataset_curr == 'parking':
+            dataset_path = os.path.join(self.data_rootdir, self.dataset_curr, 'images')
+            image_files = sorted([
+                os.path.join(dataset_path, f) 
+                for f in os.listdir(dataset_path) 
+                if f.endswith(('.png', '.jpg', '.jpeg'))
+            ])
 
-        init_img_2_path = self.config["DATA"]["init_img_2"]
-        init_img_2_filename = os.path.basename(init_img_2_path)
-        image_filenames = [os.path.basename(f) for f in image_files]
+            init_img_2_path = self.config["DATA"]["init_img_2"]
+            init_img_2_filename = os.path.basename(init_img_2_path)
+            image_filenames = [os.path.basename(f) for f in image_files]
 
-        start_index = image_filenames.index(init_img_2_filename)
-        # Skip the firstframes (used for initialization)
-        for img_path in image_files[start_index:]:
-            frame = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-            if frame is None:
-                print(f"Failed to load {img_path}. Skipping...")
-                continue
-            yield frame
+            start_index = image_filenames.index(init_img_2_filename)
+            # Skip the firstframes (used for initialization)
+            for img_path in image_files[start_index:]:
+                frame = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+                if frame is None:
+                    print(f"Failed to load {img_path}. Skipping...")
+                    continue
+                yield frame
+        elif self.dataset_curr == 'malaga':
+            dataset_path = os.path.join(self.data_rootdir, self.dataset_curr, 'malaga-urban-dataset-extract-07_rectified_800x600_Images')
+            image_files = sorted([
+                os.path.join(dataset_path, f) 
+                for f in os.listdir(dataset_path) 
+                if f.endswith('right.jpg')
+            ])
+            for img_path in image_files:
+                frame = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+                if frame is None:
+                    print(f"Failed to load {img_path}. Skipping...")
+                    continue
+                yield frame
 
 
 if __name__ == "__main__":
