@@ -1,12 +1,14 @@
 DATA:
   rootdir: '/Datasets/'
   datasets: ['parking','kitti','malaga']
-  curr_dataset: 'parking'
+  curr_dataset: 'kitti'
   
-  #init_img_1: '/malaga-urban-dataset-extract-07_rectified_800x600_Images/img_CAMERA1_1261229981.580023_right.jpg'
-  #init_img_2: '/malaga-urban-dataset-extract-07_rectified_800x600_Images/img_CAMERA1_1261229981.730026_right.jpg'
-  init_img_1: '/images/img_00000.png'
-  init_img_2: '/images/img_00005.png'
+  init_img_1: '/05/image_0/000000.png'
+  init_img_2: '/05/image_0/000006.png'
+  # init_img_1: '/malaga-urban-dataset-extract-07_rectified_800x600_Images/img_CAMERA1_1261229981.580023_right.jpg'
+  # init_img_2: '/malaga-urban-dataset-extract-07_rectified_800x600_Images/img_CAMERA1_1261229981.730026_right.jpg'
+  # init_img_1: '/images/img_00000.png'
+  # init_img_2: '/images/img_00005.png'
 
 FEATURES:
   detectors: ['shi_tomasi', 'harris', 'sift']
