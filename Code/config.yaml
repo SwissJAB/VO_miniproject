@@ -59,6 +59,6 @@ CONT_VO:
 
 PLOTS:
   show: True
-  save: True
+  save: False
   save_path: 'Code/plots/'
 
