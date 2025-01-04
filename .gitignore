@@ -6,3 +6,5 @@
 *.pyc
 .DS_Store
 *.mov
+*.txt
+__pycache__

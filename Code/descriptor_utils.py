@@ -27,11 +27,33 @@ def get_descriptors_st(image, corner_patch_size, num_keypoints, nonmaximum_supre
     descriptors = describeKeypoints(image, keypoints, descriptor_radius)
     return descriptors, keypoints
 
-def get_descriptors_st_cv2(image, corner_patch_size, num_keypoints, nonmaximum_supression_radius, descriptor_radius):
-    keypoints = cv2.goodFeaturesToTrack(image, num_keypoints, 0.01, nonmaximum_supression_radius)
-    keypoints = np.squeeze(keypoints.T)
-    print(keypoints.shape)
-    print("done")
-    #keypoints = selectKeypoints(keypoints, num_keypoints, nonmaximum_supression_radius)
+
+
+
+
+
+
+
+def get_descriptors_st_cv2(image, corner_patch_size, num_keypoints, nonmaximum_supression_radius, descriptor_radius, quality_level, debug=True):
+    keypoints = cv2.goodFeaturesToTrack(image, num_keypoints, quality_level, nonmaximum_supression_radius)
+    draw_kp = cv2.drawKeypoints(image, keypoints, image)
+    cv2.imshow("Keypoints with draw keyponts", draw_kp)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    print("keypoints shape:", keypoints.shape)
+    keypoints = keypoints.reshape(-1, 2).T # Shape is now (2, N), x, y 
+    print("keypoints shape after squeeze:", keypoints.shape)
+    if debug:
+        # Plot the keypoints on the image
+        image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        for i in range(keypoints.shape[1]):  # Loop over the second axis
+            x, y = int(keypoints[0, i]), int(keypoints[1, i])  # Extract x, y
+            cv2.circle(image, (x, y), 3, (0, 0, 255), -1)
+
+        cv2.imshow("Keypoints", image)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+    
+    
     descriptors = describeKeypoints(image, keypoints, descriptor_radius)
     return descriptors, keypoints
