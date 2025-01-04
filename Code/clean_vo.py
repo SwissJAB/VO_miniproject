@@ -523,13 +523,11 @@ class VisualOdometryPipeline:
                 for f in os.listdir(dataset_path) 
                 if f.endswith(('.png', '.jpg', '.jpeg'))
             ])
-
             init_img_2_path = self.config["DATA"]["init_img_2"]
             init_img_2_filename = os.path.basename(init_img_2_path)
             image_filenames = [os.path.basename(f) for f in image_files]
 
             start_index = image_filenames.index(init_img_2_filename)
-            # Skip the firstframes (used for initialization)
             for img_path in image_files[start_index:]:
                 frame = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
                 if frame is None:
@@ -543,13 +541,36 @@ class VisualOdometryPipeline:
                 for f in os.listdir(dataset_path) 
                 if f.endswith('right.jpg')
             ])
-            for img_path in image_files:
+            init_img_2_path = self.config["DATA"]["init_img_2"]
+            init_img_2_filename = os.path.basename(init_img_2_path)
+            image_filenames = [os.path.basename(f) for f in image_files]
+
+            start_index = image_filenames.index(init_img_2_filename)
+            for img_path in image_files[start_index:]:
                 frame = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
                 if frame is None:
                     print(f"Failed to load {img_path}. Skipping...")
                     continue
                 yield frame
 
+        elif self.dataset_curr == 'kitti':
+            dataset_path = os.path.join(self.data_rootdir, self.dataset_curr, '05/image_0')
+            image_files = sorted([
+                os.path.join(dataset_path, f) 
+                for f in os.listdir(dataset_path) 
+                if f.endswith('.png')
+            ])
+            init_img_2_path = self.config["DATA"]["init_img_2"]
+            init_img_2_filename = os.path.basename(init_img_2_path)
+            image_filenames = [os.path.basename(f) for f in image_files]
+
+            start_index = image_filenames.index(init_img_2_filename)
+            for img_path in image_files[start_index:]:
+                frame = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+                if frame is None:
+                    print(f"Failed to load {img_path}. Skipping...")
+                    continue
+                yield frame
 
 if __name__ == "__main__":
     pipeline = VisualOdometryPipeline(config_path='Code/config.yaml')
