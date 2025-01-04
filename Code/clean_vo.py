@@ -167,7 +167,8 @@ class VisualOdometryPipeline:
         
         print("Starting continuous operation...")
         prev_frame = self.img2
-        self.visualizer.update_visualizations(S_prev['X'], T_prev['t'], prev_frame, S_prev['P'], n_X_init, n_P_init, n_T_init, n_C_init, n_F_init)
+        first_t = -T_prev['R'].T @ T_prev['t']
+        self.visualizer.update_visualizations(S_prev['X'], first_t, prev_frame, S_prev['P'])
         for frame in self._get_next_frames():
             S_i, T_WC_i = self._process_frame(frame, prev_frame, S_prev, T_prev)
             self.global_poses.append(T_WC_i)
@@ -197,7 +198,7 @@ class VisualOdometryPipeline:
 
 
 
-            self.visualizer.update_visualizations(S_i['X'], t_cam_world, frame, S_i['P'], n_X[0], n_P[0], n_T[0], n_C[0], n_F[0])
+            self.visualizer.update_visualizations(S_i['X'], t_cam_world, frame, S_i['P'])
             # self.visualizer.update_visualizations(S_i['X'], T_WC_i['t'], frame, S_i['P'])
             print("----------------------------------------CONT----------------------------------------")
             # print("S: ", S_prev)
