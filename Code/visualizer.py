@@ -143,8 +143,9 @@ class VisualOdometryVisualizer:
         else:
             self.ax4.plot(range(len(self.keypoints_number)), 
                   self.keypoints_number, c='b', label='Last Keypoints')
-
-        self.ax4.set_xlabel('Frame Number')
+        #remove the x axis ticks and tick labels
+        self.ax4.tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
+        self.ax4.set_xlabel('Last 20 Frames')
         self.ax4.set_ylabel('Number of Keypoints')
         self.ax4.set_title('Number of Keypoints per Frame')
         #self.ax4.legend()
