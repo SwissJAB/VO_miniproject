@@ -3,34 +3,19 @@ DATA:
   datasets: ['parking','kitti','malaga']
   curr_dataset: 'malaga'
   
+  # For kitti
   # init_img_1: '/05/image_0/000000.png'
   # init_img_2: '/05/image_0/000006.png'
+  # For malaga
   init_img_1: '/malaga-urban-dataset-extract-07_rectified_800x600_Images/img_CAMERA1_1261229981.580023_right.jpg'
   init_img_2: '/malaga-urban-dataset-extract-07_rectified_800x600_Images/img_CAMERA1_1261229981.730026_right.jpg'
+  # For parking
   # init_img_1: '/images/img_00000.png'
   # init_img_2: '/images/img_00005.png'
 
 FEATURES:
-  detectors: ['shi_tomasi', 'harris', 'sift']
-  curr_detector: 2
-
-HARRIS:
-  cv2: True
-  kappa: 0.08
-  corner_patch_size: 9
-  num_keypoints: 200
-  nonmaximum_supression_radius: 8
-  descriptor_radius: 9
-  match_lambda: 4
-
-SHI_TOMASI:
-  cv2: True # Not implemented yet - can't make it work
-  num_keypoints: 200
-  corner_patch_size: 9
-  nonmaximum_supression_radius: 8
-  descriptor_radius: 9
-  match_lambda: 4
-  quality_level: 0.01
+  detectors: ['sift']
+  curr_detector: 0
 
 SIFT:
   nfeatures: 0 

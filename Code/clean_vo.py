@@ -46,11 +46,11 @@ class VisualOdometryPipeline:
         self.curr_desc = self.config['FEATURES']['curr_detector']
         self.descriptor_name = self.config['FEATURES']['detectors'][self.curr_desc]
 
-        self.baseline_angle_thresh = np.deg2rad(self.config['CONT_VO']['baseline_angle_thresh']) # TODO: Add logic for this
+        self.baseline_angle_thresh = np.deg2rad(self.config['CONT_VO']['baseline_angle_thresh'])
         self.global_poses = []
         self.visualizer = VisualOdometryVisualizer()
 
-                # Parameters for Lucas-Kanade optical flow
+        # Parameters for Lucas-Kanade optical flow
         self.lk_params = dict(winSize=(self.config['LK']['win_size'], self.config['LK']['win_size']),
                         maxLevel=self.config['LK']['max_level'],
                         criteria=(cv2.TERM_CRITERIA_COUNT | cv2.TERM_CRITERIA_EPS, self.config['LK']['crit_count'], self.config['LK']['crit_eps']))
@@ -108,6 +108,7 @@ class VisualOdometryPipeline:
         E_mat, mask = self._find_essential_matrix(matched_pts1_np, matched_pts2_np)
         mask = mask.ravel() == 1 if mask is not None else None
         
+        # Filter out outliers
         matched_pts1_np_filtered = matched_pts1_np[mask, :] # M x 2
         matched_pts2_np_filtered = matched_pts2_np[mask, :] # M x 2  ## M filtered points
         matched_pts1_np_f_homo = np.c_[matched_pts1_np_filtered, np.ones((matched_pts1_np_filtered.shape[0], 1))].T # 3 x M
@@ -115,7 +116,7 @@ class VisualOdometryPipeline:
 
         # Decompose E to get R, t
         Rot_mat, translat = self._decompose_E(E_mat, matched_pts1_np_f_homo, matched_pts2_np_f_homo)
-        #print("translat:", translat)
+
         # Triangulate landmarks
         proj_mat1 = self.K @ np.eye(3, 4)
         proj_mat2 = self.K @ np.c_[Rot_mat, translat]  # Invert R and t
@@ -151,13 +152,7 @@ class VisualOdometryPipeline:
         S_prev = S_1
         T_prev = T_WC_1
 
-        n_X_init =  S_1['X'].shape[0]
-        n_P_init =  S_1['P'].shape[0]
-        n_T_init =  S_1['T'].shape[0]
-        n_C_init =  S_1['C'].shape[0]
-        n_F_init =  S_1['F'].shape[0]
-        
-        #print("Starting continuous operation...")
+        print("Starting continuous operation...")
         prev_frame = self.img2
         first_t = -T_prev['R'].T @ T_prev['t']
         self.visualizer.update_visualizations(S_prev['X'], first_t, prev_frame, S_prev['P'])
@@ -165,37 +160,14 @@ class VisualOdometryPipeline:
             S_i, T_WC_i = self._process_frame(frame, prev_frame, S_prev, T_prev)
             self.global_poses.append(T_WC_i)
 
-            n_X =  S_i['X'].shape
-            n_P =  S_i['P'].shape
-            n_T =  S_i['T'].shape
-            n_C =  S_i['C'].shape
-            n_F =  S_i['F'].shape
-
-            #print("X:", n_X)
-            #print("P:", n_P)
-            #print("T:", n_T)
-            #print("C:", n_C)
-            #print("F:", n_F)
-
-            for kp in S_i['P']:
-                # Check if the coordinates are within the image
-                if kp[0] < 0 or kp[0] >= frame.shape[1] or kp[1] < 0 or kp[1] >= frame.shape[0]:
-                    #print(f"Keypoint out of bounds in frame with kp: {kp}")
-                    pass
-
             S_prev = S_i
             T_prev = T_WC_i
             prev_frame = frame
 
             t_cam_world = -T_WC_i['R'].T @ T_WC_i['t']
-
-
-
             self.visualizer.update_visualizations(S_i['X'], t_cam_world, frame, S_i['P'])
-            # self.visualizer.update_visualizations(S_i['X'], T_WC_i['t'], frame, S_i['P'])
-            #print("----------------------------------------CONT----------------------------------------")
-            # #print("S: ", S_prev)
-            #print("T: ", T_prev)
+            print("----------------------------------------CONT----------------------------------------")
+            print("T: ", T_prev)
             if self.config["PLOTS"]["save"]:
                 # save pose in txt file of current descriptor and dataset
                 pose_path = os.path.join(self.config["PLOTS"]["save_path"], f"pose_{self.descriptor_name}_{self.dataset_curr}.txt")
@@ -203,7 +175,7 @@ class VisualOdometryPipeline:
                     f.write(" ".join(map(str, T_prev['R'][0,:])) + " " + str(T_prev['t'][0])+ " ")
                     f.write(" ".join(map(str, T_prev['R'][1,:])) + " " + str(T_prev['t'][1])+ " ")
                     f.write(" ".join(map(str, T_prev['R'][2,:])) + " " + str(T_prev['t'][2]) + "\n")
-            #print('----------------------------------------CONT----------------------------------------')
+            print('----------------------------------------CONT----------------------------------------')
         
         self.visualizer.close()
         return self.global_poses
@@ -216,47 +188,14 @@ class VisualOdometryPipeline:
             key1, desc1 = self._detect_shi_tomasi(self.img1) 
             key2, desc2 = self._detect_shi_tomasi(self.img2)
         elif self.descriptor_name == 'sift':
-            key1, desc1 = self._detect_sift(self.img1, debug=False)
-            key2, desc2 = self._detect_sift(self.img2, debug=False)
+            key1, desc1 = self._detect_sift(self.img1)
+            key2, desc2 = self._detect_sift(self.img2)
         else:
             raise ValueError("Not Shi-Tomasi")
         
         return key1, desc1, key2, desc2
 
-    def _detect_shi_tomasi(self, img):
-        if self.config["PLOTS"]["save"]:
-            start_time = time.time()
-        st_cfg = self.config['SHI_TOMASI']
-
-        if st_cfg['cv2']:
-            descriptors, keypoints = get_descriptors_st_cv2(
-                img,
-                st_cfg['corner_patch_size'], 
-                st_cfg['num_keypoints'],
-                st_cfg['nonmaximum_supression_radius'], 
-                st_cfg['descriptor_radius'],
-                st_cfg['quality_level'],
-                debug=True
-            )
-        else:
-            descriptors, keypoints = get_descriptors_st(
-                img,
-                st_cfg['corner_patch_size'], 
-                st_cfg['num_keypoints'],
-                st_cfg['nonmaximum_supression_radius'], 
-                st_cfg['descriptor_radius']
-            )
-        if self.config["PLOTS"]["save"]:
-            end_time = time.time()
-            save_path = self.config["PLOTS"]["save_path"]
-            with open(os.path.join(save_path, f"time_{self.descriptor_name}.txt"), 'a') as f:
-                f.write(f"{end_time - start_time}\n")
-    
-        return keypoints, descriptors
-
-    def _detect_sift(self, img, debug=True):
-        if self.config["PLOTS"]["save"]:
-            start_time = time.time()
+    def _detect_sift(self, img):
         sift_cfg = self.config['SIFT']
         sift = cv2.SIFT_create(
             nfeatures=sift_cfg['nfeatures'],
@@ -265,21 +204,6 @@ class VisualOdometryPipeline:
             nOctaveLayers=sift_cfg['n_otave_layers']
         )
         kp, desc = sift.detectAndCompute(img, mask=None)
-        
-        # keypoints = np.array([kp.pt for kp in kp]).T  # shape (2, N)
-        # descriptors = desc.T                       # shape (128, N)
-
-        if self.config["PLOTS"]["show"]:
-            keypoint_img = cv2.drawKeypoints(img, kp, None, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-            # cv2.imshow("Keypoints before cutting", keypoint_img)
-            # cv2.waitKey(0)
-            # cv2.destroyAllWindows()
-
-        if self.config["PLOTS"]["save"]:
-            end_time = time.time()
-            save_path = self.config["PLOTS"]["save_path"]
-            with open(os.path.join(save_path, f"time_{self.descriptor_name}.txt"), 'a') as f:
-                f.write(f"{end_time - start_time}\n")
 
         return kp, desc
          
@@ -340,7 +264,7 @@ class VisualOdometryPipeline:
         """
         Process each new frame for continuous operation.
         """
-        S_new = S_prev.copy() # TODO: Make sure we put new stuff in here
+        S_new = S_prev.copy()
         T_new = T_prev.copy()
         curr_gray = frame  
         
@@ -359,27 +283,19 @@ class VisualOdometryPipeline:
         # Unpack the keypoints into a numpy array
         candidate_keypoints = np.array([kp.pt for kp in candidate_keypoints]) # shape (N, 2)
 
-        # Add the new candidate keypoints to the candidate keypoints
-        #print("Candidate keypoints shape before removing duplicates:", candidate_keypoints.shape)
+        # Remove duplicates
         candidate_keypoints = self._remove_duplicates(candidate_keypoints.T, S_new['P'].T).T
         candidate_keypoints = self._remove_duplicates(candidate_keypoints.T, S_new['C'].T).T
-        #print("Candidate keypoints shape after removing duplicates:", candidate_keypoints.shape)
-        
-        # Only take max keypoints
-        #print("Candidate keypoints shape before limiting:", candidate_keypoints.shape)
+
+        # Limit the number of candidate keypoints
         if candidate_keypoints.shape[0] > self.config['CONT_VO']['max_candidate_points']:
             candidate_keypoints = candidate_keypoints[:, :self.config['CONT_VO']['max_candidate_points']]
-            #print("Candidate keypoints shape after limiting:", candidate_keypoints.shape)
 
-
-
-
+        # Add the new candidate keypoints to the state
         S_new['C'] = np.r_[S_new['C'], candidate_keypoints]
         S_new['F'] = np.r_[S_new['F'], candidate_keypoints]
 
         prev_keypoints = S_prev['P']
-        
-        #print(f"Tracking {prev_keypoints.shape} keypoints...")
         
         # Track keypoints
         valid_prev_keypoints, valid_curr_keypoints, valid_landmarks = track_keypoints(
@@ -440,9 +356,6 @@ class VisualOdometryPipeline:
                 c = S_new['C'][i, :] # shape (2,)
                 f = S_new['F'][i, :] # shape (2,)
                 t = S_new['T'][i, :] 
-                if len(new_3d_points) >= 150:
-                    #print("Max number of new points reached, breaking...")
-                    break
                 angle_c = self._compute_angle(f, c, t[0].copy(), T_new.copy(), self.K)
                 if angle_c > self.baseline_angle_thresh:
                     M1 = self.K @ np.c_[t[0]['R'], t[0]['t']]
@@ -524,6 +437,7 @@ class VisualOdometryPipeline:
         ##print("Angle:", angle, "Sucess:", angle > self.baseline_angle_thresh)
         return angle
 
+    # Function to get the next frames from the dataset
     def _get_next_frames(self):
         """
         Generator to yield frames from the dataset for continuous operation.
@@ -543,7 +457,6 @@ class VisualOdometryPipeline:
             for img_path in image_files[start_index:]:
                 frame = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
                 if frame is None:
-                    #print(f"Failed to load {img_path}. Skipping...")
                     continue
                 yield frame
         elif self.dataset_curr == 'malaga':
@@ -561,7 +474,6 @@ class VisualOdometryPipeline:
             for img_path in image_files[start_index:]:
                 frame = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
                 if frame is None:
-                    #print(f"Failed to load {img_path}. Skipping...")
                     continue
                 yield frame
 
@@ -580,7 +492,6 @@ class VisualOdometryPipeline:
             for img_path in image_files[start_index:]:
                 frame = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
                 if frame is None:
-                    #print(f"Failed to load {img_path}. Skipping...")
                     continue
                 yield frame
 

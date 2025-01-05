@@ -9,3 +9,4 @@
 *.txt
 __pycache__
 /Code/plots
+/.DS_Store
