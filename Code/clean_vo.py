@@ -1,20 +1,11 @@
 import cv2
-import matplotlib.pyplot as plt
 import numpy as np
 import time
 import yaml
 import os
-import copy
 
-from descriptor_utils import get_descriptors_harris, get_descriptors_st, get_descriptors_harris_cv2, get_descriptors_st_cv2
-# from get_descriptors.match_descriptors import matchDescriptors
-# from get_descriptors.plot_matches import plotMatches
-
-# from two_view_geometry.estimate_essential_matrix import estimateEssentialMatrix
 from two_view_geometry.decompose_essential_matrix import decomposeEssentialMatrix
 from two_view_geometry.disambiguate_relative_pose import disambiguateRelativePose
-from two_view_geometry.linear_triangulation import linearTriangulation
-# from two_view_geometry.draw_camera import drawCamera
 
 from feature_tracking.klt_tracking import track_keypoints
 from visualizer import VisualOdometryVisualizer

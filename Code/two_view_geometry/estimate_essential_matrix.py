@@ -1,5 +1,3 @@
-import numpy
-
 from two_view_geometry.fundamental_eight_point_normalized import fundamentalEightPointNormalized
 
 def estimateEssentialMatrix(p1, p2, K1, K2):

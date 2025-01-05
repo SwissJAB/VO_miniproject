@@ -8,3 +8,4 @@
 *.mov
 *.txt
 __pycache__
+/Code/plots

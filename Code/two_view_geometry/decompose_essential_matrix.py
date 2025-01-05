@@ -1,6 +1,5 @@
 import numpy as np
 
-
 def decomposeEssentialMatrix(E):
     """ Given an essential matrix, compute the camera motion, i.e.,  R and T such
      that E ~ T_x R
