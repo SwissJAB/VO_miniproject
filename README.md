@@ -6,7 +6,7 @@ The goal of this mini-project is to implement a simple, monocular, visual odomet
 
 ## Video Playlist
 
-[https://www.youtube.com/watch?v=7AjItxhhdrU](https://www.youtube.com/watch?v=7AjItxhhdrU)
+[https://www.youtube.com/playlist?list=PLYPB14LfGrkPhpV88stzWYthXyCQFvqRH](https://www.youtube.com/playlist?list=PLYPB14LfGrkPhpV88stzWYthXyCQFvqRH)
 
 ---
 
