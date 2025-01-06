@@ -1,0 +1,54 @@
+DATA:
+  rootdir: '/Datasets/'
+  datasets: ['parking','kitti','malaga']
+  curr_dataset: 'parking'
+  
+  # For kitti
+  # init_img_1: '/05/image_0/000000.png'
+  # init_img_2: '/05/image_0/000006.png'
+  # For malaga
+  # init_img_1: '/malaga-urban-dataset-extract-07_rectified_800x600_Images/img_CAMERA1_1261229981.580023_right.jpg'
+  # init_img_2: '/malaga-urban-dataset-extract-07_rectified_800x600_Images/img_CAMERA1_1261229981.730026_right.jpg'
+  # For parking
+  init_img_1: '/images/img_00000.png'
+  init_img_2: '/images/img_00005.png'
+
+FEATURES:
+  detectors: ['sift']
+  curr_detector: 0
+
+SIFT:
+  nfeatures: 0 
+  contrast_threshold: 0.04
+  sigma: 1.6
+  n_otave_layers: 3
+
+MATCHING:
+  k: 2
+  ratio: 0.75
+
+LK:
+  win_size: 21
+  max_level: 3
+  crit_count: 30
+  crit_eps: 0.01
+
+RANSAC:
+  prob: 0.999
+  threshold: 2.0
+
+PNPRANSAC:
+  iterations: 1000
+  reprojection_error: 4.0
+  prob: 0.99
+
+CONT_VO:
+  baseline_angle_thresh: 3 # Degree threshold for baseline angle
+  kp_dist_thresh: 4.0 # min distance between keypoints 
+  max_candidate_points: 150 # max number of new candidate points
+
+PLOTS:
+  show: True
+  save: False
+  save_path: 'Code/plots/'
+

@@ -14,7 +14,7 @@ from visualizer import VisualOdometryVisualizer
 
 
 class VisualOdometryPipeline:
-    def __init__(self, config_path='Code/config.yaml'):
+    def __init__(self, config_path='Code/configs/config_parking.yaml'):
         """
         Constructor loads and parses the configuration file, reads the necessary images,
         and initializes internal variables.
@@ -73,33 +73,6 @@ class VisualOdometryPipeline:
 
         key1, desc1, key2, desc2 = self._detect_and_compute_init()
         matched_pts1, matched_pts2 = self._match_descriptors_sift_cv2(key1, desc1, key2, desc2) # Matches is list of list
-        
-        if self.config["PLOTS"]["show"]:
-            img1_copy = self.img1.copy()
-            img2_copy = self.img2.copy()
-            img1_color = cv2.cvtColor(img1_copy, cv2.COLOR_GRAY2BGR)
-            img1_og = img1_color.copy()
-            img2_color = cv2.cvtColor(img2_copy, cv2.COLOR_GRAY2BGR)
-            img2_og = img2_color.copy()
-            # Draw keypoints as circles
-            for pt in matched_pts1:
-                x, y = int(pt[0]), int(pt[1])
-                cv2.circle(img1_color, (x, y), 3, (0, 0, 255), -1)
-
-            for pt in matched_pts2:
-                x, y = int(pt[0]), int(pt[1])
-                cv2.circle(img2_color, (x, y), 3, (0, 0, 255), -1)
-
-            img1_og = cv2.drawKeypoints(img1_og, key1, None, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-            img2_og = cv2.drawKeypoints(img2_og, key2, None, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-
-        
-            cv2.imshow("Keypoints1 after matching", img1_color)
-            cv2.imshow("Keypoints2 after matching", img2_color)
-            cv2.imshow("Keypoints1 before matching", img1_og)
-            cv2.imshow("Keypoints2 before matching", img2_og)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
             
         matched_pts1_np = np.array(matched_pts1) # shape (N, 2)
         matched_pts2_np = np.array(matched_pts2) # shape (N, 2)
@@ -496,5 +469,5 @@ class VisualOdometryPipeline:
                 yield frame
 
 if __name__ == "__main__":
-    pipeline = VisualOdometryPipeline(config_path='Code/config.yaml')
+    pipeline = VisualOdometryPipeline(config_path='Code/configs/config_parking.yaml')
     pipeline.run()
